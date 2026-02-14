@@ -1,0 +1,251 @@
+"use client";
+
+import { useState } from "react";
+import { Loader2, Plus, X, FlaskConical } from "lucide-react";
+import type { PriorAuthRequest, ReviewResponse } from "@/lib/types";
+import { submitReview } from "@/lib/api";
+import { SAMPLE_REQUEST } from "@/lib/sample-case";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+
+interface UploadFormProps {
+  onReviewComplete: (review: ReviewResponse) => void;
+}
+
+const emptyRequest: PriorAuthRequest = {
+  patient_name: "",
+  patient_dob: "",
+  provider_npi: "",
+  diagnosis_codes: [""],
+  procedure_codes: [""],
+  clinical_notes: "",
+  insurance_id: "",
+};
+
+export function UploadForm({ onReviewComplete }: UploadFormProps) {
+  const [form, setForm] = useState<PriorAuthRequest>(emptyRequest);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function updateField<K extends keyof PriorAuthRequest>(
+    key: K,
+    value: PriorAuthRequest[K]
+  ) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function updateCode(
+    field: "diagnosis_codes" | "procedure_codes",
+    index: number,
+    value: string
+  ) {
+    const updated = [...form[field]];
+    updated[index] = value;
+    updateField(field, updated);
+  }
+
+  function addCode(field: "diagnosis_codes" | "procedure_codes") {
+    updateField(field, [...form[field], ""]);
+  }
+
+  function removeCode(
+    field: "diagnosis_codes" | "procedure_codes",
+    index: number
+  ) {
+    if (form[field].length <= 1) return;
+    updateField(
+      field,
+      form[field].filter((_, i) => i !== index)
+    );
+  }
+
+  function loadSample() {
+    setForm({ ...SAMPLE_REQUEST });
+    setError(null);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      const cleaned: PriorAuthRequest = {
+        ...form,
+        diagnosis_codes: form.diagnosis_codes.filter((c) => c.trim()),
+        procedure_codes: form.procedure_codes.filter((c) => c.trim()),
+      };
+      const result = await submitReview(cleaned);
+      onReviewComplete(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="text-lg">New Authorization Request</CardTitle>
+        <Button variant="secondary" size="sm" onClick={loadSample}>
+          <FlaskConical className="mr-1 h-3.5 w-3.5" />
+          Load Sample Case
+        </Button>
+      </CardHeader>
+
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Row 1: Patient info */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="patient_name">Patient Name</Label>
+              <Input
+                id="patient_name"
+                placeholder="Jane Doe"
+                value={form.patient_name}
+                onChange={(e) => updateField("patient_name", e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="patient_dob">Date of Birth</Label>
+              <Input
+                id="patient_dob"
+                type="date"
+                value={form.patient_dob}
+                onChange={(e) => updateField("patient_dob", e.target.value)}
+                required
+              />
+            </div>
+          </div>
+
+          {/* Row 2: Provider / Insurance */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="provider_npi">Provider NPI</Label>
+              <Input
+                id="provider_npi"
+                placeholder="1234567890"
+                value={form.provider_npi}
+                onChange={(e) => updateField("provider_npi", e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="insurance_id">Insurance ID (optional)</Label>
+              <Input
+                id="insurance_id"
+                placeholder="MCR-123456789A"
+                value={form.insurance_id ?? ""}
+                onChange={(e) => updateField("insurance_id", e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Dynamic code arrays */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Diagnosis codes */}
+            <div className="space-y-2">
+              <Label>Diagnosis Codes (ICD-10)</Label>
+              {form.diagnosis_codes.map((code, i) => (
+                <div key={i} className="flex gap-1">
+                  <Input
+                    placeholder="e.g. R91.1"
+                    value={code}
+                    onChange={(e) =>
+                      updateCode("diagnosis_codes", i, e.target.value)
+                    }
+                  />
+                  {form.diagnosis_codes.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeCode("diagnosis_codes", i)}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => addCode("diagnosis_codes")}
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" />
+                Add Code
+              </Button>
+            </div>
+
+            {/* Procedure codes */}
+            <div className="space-y-2">
+              <Label>Procedure Codes (CPT)</Label>
+              {form.procedure_codes.map((code, i) => (
+                <div key={i} className="flex gap-1">
+                  <Input
+                    placeholder="e.g. 31628"
+                    value={code}
+                    onChange={(e) =>
+                      updateCode("procedure_codes", i, e.target.value)
+                    }
+                  />
+                  {form.procedure_codes.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeCode("procedure_codes", i)}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => addCode("procedure_codes")}
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" />
+                Add Code
+              </Button>
+            </div>
+          </div>
+
+          {/* Clinical notes */}
+          <div className="space-y-2">
+            <Label htmlFor="clinical_notes">Clinical Notes</Label>
+            <Textarea
+              id="clinical_notes"
+              rows={5}
+              placeholder="Enter clinical notes, history of present illness, prior treatments..."
+              value={form.clinical_notes}
+              onChange={(e) => updateField("clinical_notes", e.target.value)}
+              required
+            />
+          </div>
+
+          {/* Error */}
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          {/* Submit */}
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {loading ? "Submitting for Review..." : "Submit for Review"}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}

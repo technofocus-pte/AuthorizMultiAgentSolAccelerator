@@ -6,6 +6,8 @@ Healthcare MCP Servers**. Three specialized agents — Compliance, Clinical
 Reviewer, and Coverage — work in parallel and sequence, coordinated by an
 orchestrator that applies a gate-based decision rubric and produces a final
 recommendation with confidence scoring and an audit justification document.
+The frontend is built with **Next.js** (static export), **shadcn/ui**, and
+**Tailwind CSS** with a Microsoft-inspired design system.
 Includes a human-in-the-loop **Decision Panel** for accept/override workflow,
 **PDF notification letter generation** (approval and pend via `fpdf2`),
 **CPT/HCPCS format validation**, and a **sample case** for demo use.
@@ -26,7 +28,7 @@ confidence scoring, progressive gate evaluation, and structured audit trails.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│                     React Frontend                           │
+│               Next.js Frontend (shadcn/ui)                   │
 │  UploadForm → POST /api/review → ReviewDashboard             │
 │  [Load Sample Case]              ├── Summary + Confidence    │
 │                                  ├── Documentation Gaps      │
@@ -111,7 +113,7 @@ confidence scoring, progressive gate evaluation, and structured audit trails.
 
 ### How it works
 
-1. A clinical reviewer fills in the PA request form in the React frontend,
+1. A clinical reviewer fills in the PA request form in the Next.js frontend,
    or clicks **"Load Sample Case"** to populate a demo case (CT-guided
    lung biopsy: ICD-10 R91.1/J18.9/R05.9, CPT 31628, NPI 1902809042).
 
@@ -437,22 +439,28 @@ prior-auth-maf/
 │           └── decision.py              # POST /api/decision (accept/override + letter generation)
 │
 ├── frontend/
-│   ├── index.html                        # HTML entry point
-│   ├── package.json                      # React 18 + Vite + TypeScript
-│   ├── tsconfig.json                     # TypeScript config
-│   ├── vite.config.ts                    # Vite dev server (proxies to backend)
-│   └── src/
-│       ├── main.tsx                      # React DOM entry
-│       ├── App.tsx                       # Main layout (form + dashboard)
-│       ├── components/
-│       │   ├── UploadForm.tsx            # PA request form + "Load Sample Case" button
-│       │   ├── ReviewDashboard.tsx       # Results: summary, confidence, gaps, audit trail, decision panel
-│       │   ├── AgentDetails.tsx          # Tabbed per-agent breakdown with confidence bars
-│       │   └── DecisionPanel.tsx         # Accept/Override decision + letter preview + PDF download
-│       ├── services/
-│       │   └── api.ts                    # Backend API client (submitReview + submitDecision)
-│       └── types/
-│           └── index.ts                  # TypeScript types (request, response, agents, audit, decision, notification)
+│   ├── package.json                      # Next.js 16 + shadcn/ui + Tailwind CSS
+│   ├── next.config.ts                    # Static export (output: 'export') + dev API rewrites
+│   ├── tsconfig.json                     # TypeScript config (path alias @/*)
+│   ├── components.json                   # shadcn/ui configuration
+│   ├── .env.example                      # Environment variable template
+│   ├── app/
+│   │   ├── globals.css                   # Tailwind directives + Microsoft theme variables
+│   │   ├── layout.tsx                    # Root layout (metadata, font, body)
+│   │   └── page.tsx                      # Main page (form + dashboard)
+│   ├── components/
+│   │   ├── ui/                           # shadcn/ui primitives (badge, button, card, etc.)
+│   │   ├── header.tsx                    # App title + subtitle
+│   │   ├── confidence-bar.tsx            # Reusable green/amber/red progress bar
+│   │   ├── upload-form.tsx               # PA request form + "Load Sample Case" button
+│   │   ├── review-dashboard.tsx          # Results: summary, confidence, gaps, audit trail
+│   │   ├── agent-details.tsx             # Tabbed per-agent breakdown (Compliance/Clinical/Coverage)
+│   │   └── decision-panel.tsx            # Accept/Override decision + letter preview + PDF download
+│   └── lib/
+│       ├── api.ts                        # Backend API client (submitReview + submitDecision)
+│       ├── types.ts                      # TypeScript types (request, response, agents, audit, decision)
+│       ├── sample-case.ts                # Sample case data for demo
+│       └── utils.ts                      # shadcn cn() utility
 │
 ├── .gitignore
 ├── .dockerignore                          # Docker build exclusions
@@ -460,8 +468,8 @@ prior-auth-maf/
 ├── backend/
 │   └── Dockerfile                         # Python + Claude Agent SDK (CLI bundled in wheel)
 ├── frontend/
-│   ├── Dockerfile                         # Multi-stage: Node build → Nginx serve
-│   └── nginx.conf                         # Proxies /api → backend, SPA catch-all
+│   ├── Dockerfile                         # Multi-stage: Node build → Nginx serve (static export)
+│   └── nginx.conf                         # Proxies /api → backend, SPA catch-all, /_next/static cache
 └── README.md                             # This file
 ```
 
@@ -520,6 +528,9 @@ The MCP server endpoints are pre-configured with defaults from the
 ```bash
 cd frontend
 npm install
+
+# Configure environment (optional — defaults work for local dev)
+cp .env.example .env.local
 ```
 
 ### 4. Run the application
@@ -532,13 +543,13 @@ cd backend
 uvicorn app.main:app --reload
 ```
 
-**Frontend** (runs on port 5173, proxies API calls to backend):
+**Frontend** (runs on port 3000, proxies API calls to backend via Next.js rewrites):
 ```bash
 cd frontend
 npm run dev
 ```
 
-Open `http://localhost:5173` in your browser.
+Open `http://localhost:3000` in your browser.
 
 ---
 
@@ -713,7 +724,8 @@ Generates an authorization number and notification letter.
 | `agent-framework-claude` | Microsoft Agent Framework with Claude SDK |
 | `fpdf2` | PDF generation for notification letters |
 | `pydantic` | Request/response validation |
-| `react` + `vite` | Frontend SPA |
+| `react` + `next` | Frontend SPA (Next.js static export) |
+| `shadcn/ui` + `tailwindcss` | UI component library + utility-first CSS |
 
 Note: No `mcp` Python SDK or `httpx` dependency needed — the Claude SDK
 handles MCP communication internally via `McpHttpServerConfig`.
@@ -729,7 +741,7 @@ handles MCP communication internally via `McpHttpServerConfig`.
 3. Create the agent with `ClaudeAgent(instructions=..., default_options={"mcp_servers": ...})`
 4. Add the agent call to `orchestrator.py` (parallel or sequential)
 5. Add the agent's result model to `schemas.py` and `AgentResults`
-6. Add a tab for it in `frontend/src/components/AgentDetails.tsx`
+6. Add a tab for it in `frontend/components/agent-details.tsx`
 
 ### Add a new MCP server
 
@@ -870,8 +882,8 @@ Procedure code validation runs as a pre-flight step before any agents execute:
 
 ### Sample data
 
-The frontend includes a **"Load Sample Case"** button that populates a
-CT-guided transbronchial lung biopsy case:
+The frontend includes a **"Load Sample Case"** button (in `lib/sample-case.ts`)
+that populates a CT-guided transbronchial lung biopsy case:
 
 | Field | Value |
 |-------|-------|
@@ -1095,7 +1107,7 @@ AZURE_STORAGE_ACCOUNT_URL=https://<account>.blob.core.windows.net
   receive and return plain dicts. They are unaware of storage.
 - **Frontend** — the API contract (`ReviewResponse`, `DecisionResponse`)
   stays the same. The frontend doesn't know whether the backend uses a
-  dict or Postgres.
+  dict or Postgres. Built with Next.js (static export) + shadcn/ui.
 - **MCP server configuration** — completely independent of storage.
 - **Notification letter templates** — `generate_approval_letter()` and
   `generate_pend_letter()` produce the same text/PDF regardless of where
@@ -1112,7 +1124,7 @@ The app runs as two containers — a Python backend and an Nginx frontend:
 ```
 ┌────────────────────────────────────────────────────────────┐
 │  localhost:3000 (frontend - Nginx)                         │
-│    ├── /*      → React SPA (static files)                  │
+│    ├── /*      → Next.js SPA (static export)                 │
 │    └── /api/*  → reverse proxy to backend:8000             │
 │                   (300s timeout for agent processing)      │
 └──────────────────────┬─────────────────────────────────────┘
@@ -1171,9 +1183,10 @@ back to a system-installed `claude` CLI via `shutil.which("claude")`.
 
 | Layer | Details |
 |-------|---------|
-| Build stage | `node:20-slim` — `npm ci && npm run build` |
-| Runtime stage | `nginx:alpine` — serves built React app |
+| Build stage | `node:20-slim` — `npm ci && npm run build` (Next.js static export to `out/`) |
+| Runtime stage | `nginx:alpine` — serves built Next.js app |
 | Proxy | `/api/*` → `http://backend:8000` (via `nginx.conf`) |
+| Static cache | `/_next/static/` — 1-year immutable cache |
 | Port | 80 (mapped to 3000 in docker-compose) |
 
 ### Running locally with Docker Compose

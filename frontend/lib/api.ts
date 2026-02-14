@@ -1,6 +1,11 @@
-import type { PriorAuthRequest, ReviewResponse, DecisionRequest, DecisionResponse } from "../types";
+import type {
+  PriorAuthRequest,
+  ReviewResponse,
+  DecisionRequest,
+  DecisionResponse,
+} from "./types";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "/api";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "/api";
 
 export async function submitReview(
   request: PriorAuthRequest
