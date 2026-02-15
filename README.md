@@ -10,7 +10,8 @@ The frontend is built with **Next.js** (static export), **shadcn/ui**, and
 **Tailwind CSS** with a Microsoft-inspired design system.
 Includes a human-in-the-loop **Decision Panel** for accept/override workflow,
 **PDF notification letter generation** (approval and pend via `fpdf2`),
-**CPT/HCPCS format validation**, and a **sample case** for demo use.
+**CPT/HCPCS format validation**, **real-time agent progress streaming** (SSE),
+**audit justification document download**, and a **sample case** for demo use.
 
 Incorporates best practices from the
 [Anthropic prior-auth-review-skill](https://github.com/anthropics/healthcare/tree/main/prior-auth-review-skill):
@@ -29,18 +30,23 @@ confidence scoring, progressive gate evaluation, and structured audit trails.
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │               Next.js Frontend (shadcn/ui)                   │
-│  UploadForm → POST /api/review → ReviewDashboard             │
-│  [Load Sample Case]              ├── Summary + Confidence    │
-│                                  ├── Documentation Gaps      │
-│                                  ├── Audit Trail             │
-│                                  ├── Agent Details (tabbed)  │
-│                                  └── DecisionPanel           │
-│                                       ├── Accept / Override  │
-│                                       ├── POST /api/decision │
-│                                       └── Letter Preview +   │
-│                                           PDF Download (.pdf) │
+│  UploadForm → POST /api/review/stream → ProgressTracker      │
+│  [Load Sample Case]    (SSE)             ├── Phase timeline  │
+│                                          ├── Agent cards     │
+│                                          └── Elapsed timer   │
+│                                                              │
+│  ReviewDashboard (after review completes)                    │
+│  ├── Summary + Confidence                                    │
+│  ├── Documentation Gaps                                      │
+│  ├── Audit Trail                                             │
+│  ├── Agent Details (tabbed)                                  │
+│  ├── DecisionPanel                                           │
+│  │    ├── Accept / Override                                  │
+│  │    ├── POST /api/decision                                 │
+│  │    └── Letter Preview + PDF Download (.pdf)               │
+│  └── Audit Justification Download (.md)                      │
 └──────────────────────┬───────────────────────────────────────┘
-                       │  REST (JSON)
+                       │  REST (JSON) + SSE (text/event-stream)
 ┌──────────────────────▼───────────────────────────────────────┐
 │                   FastAPI Backend                             │
 │                                                              │
@@ -117,7 +123,8 @@ confidence scoring, progressive gate evaluation, and structured audit trails.
    or clicks **"Load Sample Case"** to populate a demo case (CT-guided
    lung biopsy: ICD-10 R91.1/J18.9/R05.9, CPT 31628, NPI 1902809042).
 
-2. The frontend POSTs to `POST /api/review` on the FastAPI backend.
+2. The frontend POSTs to `POST /api/review/stream` on the FastAPI backend,
+   opening an SSE (Server-Sent Events) connection for real-time progress.
 
 3. The **Orchestrator** runs a pre-flight check and then launches three
    specialized Claude agents:
@@ -169,14 +176,22 @@ confidence scoring, progressive gate evaluation, and structured audit trails.
    per-agent breakdowns, audit trail, and documentation gaps for full
    transparency.
 
-5. The frontend displays the recommendation with a confidence level badge,
-   documentation gaps with critical/non-critical styling, an audit trail
-   section, a **tabbed Agent Details** panel showing each agent's
-   structured output (compliance checklist, diagnosis validation table with
-   billability, criteria assessment grid with confidence bars, etc.), and
-   a **Decision Panel** for human reviewer action.
+5. During the review, the frontend displays a **real-time progress tracker**
+   with a vertical phase timeline, per-agent status cards (with icons and
+   color-coded badges), a progress bar, and an elapsed timer. Each phase
+   boundary streams an SSE `progress` event; the final result arrives as
+   an SSE `result` event.
 
-6. The **Decision Panel** supports two flows:
+6. Once complete, the frontend displays the recommendation with a confidence
+   level badge, documentation gaps with critical/non-critical styling, an
+   audit trail section, a **tabbed Agent Details** panel showing each agent's
+   structured output (compliance checklist, diagnosis validation table with
+   billability, criteria assessment grid with confidence bars, etc.), an
+   **Audit Justification Download** button (`.md` file with the full
+   8-section audit document), and a **Decision Panel** for human reviewer
+   action.
+
+7. The **Decision Panel** supports two flows:
    - **Accept** — the human reviewer confirms the AI recommendation
    - **Override** — the reviewer selects a different recommendation
      (approve or pend) and provides a written rationale
@@ -437,7 +452,7 @@ prior-auth-maf/
 │       ├── models/
 │       │   └── schemas.py                # Pydantic models (request, response, per-agent, audit, decision, notification)
 │       └── routers/
-│           ├── review.py                 # POST /api/review + GET /api/review/{id} + GET /api/reviews
+│           ├── review.py                 # POST /api/review + POST /api/review/stream (SSE) + GET endpoints
 │           └── decision.py              # POST /api/decision (accept/override + letter generation)
 │
 ├── frontend/
@@ -454,13 +469,14 @@ prior-auth-maf/
 │   │   ├── ui/                           # shadcn/ui primitives (badge, button, card, etc.)
 │   │   ├── header.tsx                    # App title + subtitle
 │   │   ├── confidence-bar.tsx            # Reusable green/amber/red progress bar
-│   │   ├── upload-form.tsx               # PA request form + "Load Sample Case" button
-│   │   ├── review-dashboard.tsx          # Results: summary, confidence, gaps, audit trail
+│   │   ├── upload-form.tsx               # PA request form + "Load Sample Case" + SSE submit
+│   │   ├── progress-tracker.tsx          # Real-time agent progress (phase timeline, agent cards, timer)
+│   │   ├── review-dashboard.tsx          # Results: summary, confidence, gaps, audit trail, justification download
 │   │   ├── agent-details.tsx             # Tabbed per-agent breakdown (Compliance/Clinical/Coverage)
 │   │   └── decision-panel.tsx            # Accept/Override decision + letter preview + PDF download
 │   └── lib/
-│       ├── api.ts                        # Backend API client (submitReview + submitDecision)
-│       ├── types.ts                      # TypeScript types (request, response, agents, audit, decision)
+│       ├── api.ts                        # Backend API client (submitReviewStream + submitDecision)
+│       ├── types.ts                      # TypeScript types (request, response, agents, audit, decision, progress)
 │       ├── sample-case.ts                # Sample case data for demo
 │       └── utils.ts                      # shadcn cn() utility
 │
@@ -566,6 +582,9 @@ Open `http://localhost:3000` in your browser.
 ### `POST /api/review`
 
 Submit a prior authorization request for multi-agent review.
+Returns the complete result as a single JSON response (no streaming).
+Prefer `POST /api/review/stream` for the frontend — this endpoint is
+useful for programmatic/API integrations that don't need progress updates.
 
 **Request body:**
 
@@ -632,6 +651,42 @@ Submit a prior authorization request for multi-agent review.
   }
 }
 ```
+
+### `POST /api/review/stream`
+
+Submit a prior authorization request with **real-time SSE progress streaming**.
+Same request body as `POST /api/review`. Returns `text/event-stream`.
+
+The frontend uses `fetch` + `ReadableStream` (not `EventSource`, which only
+supports GET) to consume this endpoint.
+
+**SSE event types:**
+
+| Event | When | Payload |
+|-------|------|---------|
+| `progress` | At each phase boundary (9 total) | `{phase, status, progress_pct, message, agents}` |
+| `result` | Review complete | Full `ReviewResponse` JSON |
+| `error` | Pipeline failure | `{detail: "error message"}` |
+| `: keepalive` | Every 2s during long agent runs | SSE comment (ignored by client) |
+
+**Progress event example:**
+
+```json
+{
+  "phase": "phase_1",
+  "status": "running",
+  "progress_pct": 10,
+  "message": "Running Compliance and Clinical agents in parallel",
+  "agents": {
+    "compliance": {"status": "running", "detail": "Checking documentation completeness"},
+    "clinical": {"status": "running", "detail": "Validating codes and extracting clinical evidence"}
+  }
+}
+```
+
+**Phase IDs:** `preflight` → `phase_1` → `phase_2` → `phase_3` → `phase_4`
+
+**Agent statuses:** `pending` → `running` → `done` | `error`
 
 ### `GET /health`
 
