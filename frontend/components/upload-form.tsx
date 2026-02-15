@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Loader2, Plus, X, FlaskConical, User, CalendarDays, Hash, CreditCard, Stethoscope, FileText, Send } from "lucide-react";
-import type { PriorAuthRequest, ReviewResponse } from "@/lib/types";
-import { submitReview } from "@/lib/api";
+import type { PriorAuthRequest, ReviewResponse, ReviewProgress, ProgressEvent, AgentId } from "@/lib/types";
+import { submitReviewStream } from "@/lib/api";
 import { SAMPLE_REQUEST } from "@/lib/sample-case";
+import { ProgressTracker } from "@/components/progress-tracker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -30,6 +31,40 @@ export function UploadForm({ onReviewComplete }: UploadFormProps) {
   const [form, setForm] = useState<PriorAuthRequest>(emptyRequest);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<ReviewProgress | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const initialProgress: ReviewProgress = {
+    currentPhase: "preflight",
+    progressPct: 0,
+    message: "Starting review...",
+    agents: {
+      compliance: { status: "pending", detail: "Waiting" },
+      clinical: { status: "pending", detail: "Waiting" },
+      coverage: { status: "pending", detail: "Waiting" },
+      synthesis: { status: "pending", detail: "Waiting" },
+    },
+    phases: {
+      preflight: "pending",
+      phase_1: "pending",
+      phase_2: "pending",
+      phase_3: "pending",
+      phase_4: "pending",
+    },
+  };
+
+  function applyProgressEvent(prev: ReviewProgress, event: ProgressEvent): ReviewProgress {
+    const next = { ...prev };
+    next.currentPhase = event.phase;
+    next.progressPct = event.progress_pct;
+    next.message = event.message;
+    next.phases = { ...prev.phases, [event.phase]: event.status };
+    next.agents = { ...prev.agents };
+    for (const [agentId, agentState] of Object.entries(event.agents)) {
+      next.agents[agentId as AgentId] = agentState;
+    }
+    return next;
+  }
 
   function updateField<K extends keyof PriorAuthRequest>(
     key: K,
@@ -72,19 +107,30 @@ export function UploadForm({ onReviewComplete }: UploadFormProps) {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    try {
-      const cleaned: PriorAuthRequest = {
-        ...form,
-        diagnosis_codes: form.diagnosis_codes.filter((c) => c.trim()),
-        procedure_codes: form.procedure_codes.filter((c) => c.trim()),
-      };
-      const result = await submitReview(cleaned);
-      onReviewComplete(result);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
-    } finally {
-      setLoading(false);
-    }
+    setProgress(initialProgress);
+
+    const cleaned: PriorAuthRequest = {
+      ...form,
+      diagnosis_codes: form.diagnosis_codes.filter((c) => c.trim()),
+      procedure_codes: form.procedure_codes.filter((c) => c.trim()),
+    };
+
+    abortRef.current = submitReviewStream(
+      cleaned,
+      (event) => {
+        setProgress((prev) => prev ? applyProgressEvent(prev, event) : prev);
+      },
+      (result) => {
+        setLoading(false);
+        setProgress(null);
+        onReviewComplete(result);
+      },
+      (errMsg) => {
+        setLoading(false);
+        setProgress((prev) => prev ? { ...prev, error: errMsg } : prev);
+        setError(errMsg);
+      },
+    );
   }
 
   return (
@@ -272,6 +318,11 @@ export function UploadForm({ onReviewComplete }: UploadFormProps) {
               required
             />
           </div>
+
+          {/* Progress tracker */}
+          {progress && (
+            <ProgressTracker progress={progress} />
+          )}
 
           {/* Error */}
           {error && (

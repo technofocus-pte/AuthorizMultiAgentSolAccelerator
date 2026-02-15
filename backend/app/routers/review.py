@@ -1,8 +1,11 @@
 """API routes for prior authorization review."""
 
+import asyncio
+import json
 import uuid
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import StreamingResponse
 
 from app.models.schemas import (
     PriorAuthRequest,
@@ -25,28 +28,8 @@ from app.agents.orchestrator import (
 router = APIRouter()
 
 
-@router.post("/review", response_model=ReviewResponse)
-async def submit_review(request: PriorAuthRequest):
-    """Submit a prior authorization request for multi-agent AI-assisted review.
-
-    Three specialized agents (Compliance, Clinical Reviewer, Coverage) run
-    in a fan-out/fan-in pattern. An orchestrator synthesizes their outputs
-    into a final APPROVE or PEND recommendation using a gate-based decision
-    rubric with confidence scoring.
-
-    Returns the structured decision along with per-agent breakdowns, audit
-    trail, and an audit justification document.
-    """
-    request_id = str(uuid.uuid4())
-
-    try:
-        result = await run_multi_agent_review(request.model_dump())
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Multi-agent review failed: {str(e)}",
-        )
-
+def _build_review_response(request_id: str, result: dict) -> ReviewResponse:
+    """Build a ReviewResponse from orchestrator output."""
     # Parse merged tool_results from all agents
     tool_results = []
     for tr in result.get("tool_results", []):
@@ -78,7 +61,7 @@ async def submit_review(request: PriorAuthRequest):
     if not doc_gaps and agent_results.coverage and agent_results.coverage.documentation_gaps:
         doc_gaps = agent_results.coverage.documentation_gaps
 
-    response = ReviewResponse(
+    return ReviewResponse(
         request_id=request_id,
         recommendation=result.get("recommendation", "pend_for_review"),
         confidence=result.get("confidence", 0.0),
@@ -102,10 +85,102 @@ async def submit_review(request: PriorAuthRequest):
         audit_trail=audit_trail,
     )
 
+
+@router.post("/review", response_model=ReviewResponse)
+async def submit_review(request: PriorAuthRequest):
+    """Submit a prior authorization request for multi-agent AI-assisted review.
+
+    Three specialized agents (Compliance, Clinical Reviewer, Coverage) run
+    in a fan-out/fan-in pattern. An orchestrator synthesizes their outputs
+    into a final APPROVE or PEND recommendation using a gate-based decision
+    rubric with confidence scoring.
+
+    Returns the structured decision along with per-agent breakdowns, audit
+    trail, and an audit justification document.
+    """
+    request_id = str(uuid.uuid4())
+
+    try:
+        result = await run_multi_agent_review(request.model_dump())
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Multi-agent review failed: {str(e)}",
+        )
+
+    response = _build_review_response(request_id, result)
+
     # Persist for later retrieval and decision-making
     store_review(request_id, request.model_dump(), response.model_dump())
 
     return response
+
+
+@router.post("/review/stream")
+async def submit_review_stream(request: PriorAuthRequest, http_request: Request):
+    """Stream prior authorization review progress via Server-Sent Events.
+
+    Emits progress events as the multi-agent pipeline runs, then sends
+    the final ReviewResponse as an 'event: result' SSE event.
+    """
+    request_id = str(uuid.uuid4())
+    queue: asyncio.Queue[dict | None] = asyncio.Queue()
+
+    async def on_progress(event: dict) -> None:
+        await queue.put(event)
+
+    async def run_review() -> None:
+        try:
+            result = await run_multi_agent_review(
+                request.model_dump(), on_progress=on_progress
+            )
+            response = _build_review_response(request_id, result)
+            store_review(request_id, request.model_dump(), response.model_dump())
+            await queue.put({"_type": "result", "data": response.model_dump()})
+        except Exception as e:
+            await queue.put({"_type": "error", "detail": str(e)})
+        finally:
+            await queue.put(None)  # Sentinel
+
+    async def event_generator():
+        task = asyncio.create_task(run_review())
+        try:
+            while True:
+                # Check if client disconnected
+                if await http_request.is_disconnected():
+                    task.cancel()
+                    break
+
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=2.0)
+                except asyncio.TimeoutError:
+                    # Send keepalive comment
+                    yield ": keepalive\n\n"
+                    continue
+
+                if event is None:
+                    break  # Sentinel — pipeline done
+
+                if event.get("_type") == "result":
+                    data = json.dumps(event["data"], default=str)
+                    yield f"event: result\ndata: {data}\n\n"
+                elif event.get("_type") == "error":
+                    data = json.dumps({"detail": event["detail"]})
+                    yield f"event: error\ndata: {data}\n\n"
+                else:
+                    data = json.dumps(event, default=str)
+                    yield f"event: progress\ndata: {data}\n\n"
+        except asyncio.CancelledError:
+            task.cancel()
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/review/{request_id}", response_model=ReviewResponse)

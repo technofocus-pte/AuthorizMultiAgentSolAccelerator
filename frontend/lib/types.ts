@@ -151,6 +151,45 @@ export interface ReviewResponse {
   audit_trail?: AuditTrail;
 }
 
+// --- Progress tracking types (SSE streaming) ---
+
+export type PhaseId =
+  | "preflight"
+  | "phase_1"
+  | "phase_2"
+  | "phase_3"
+  | "phase_4";
+
+export type AgentId =
+  | "compliance"
+  | "clinical"
+  | "coverage"
+  | "synthesis";
+
+export type AgentStatus = "pending" | "running" | "done" | "error";
+
+export interface AgentProgress {
+  status: AgentStatus;
+  detail: string;
+}
+
+export interface ProgressEvent {
+  phase: PhaseId;
+  status: "running" | "completed";
+  progress_pct: number;
+  message: string;
+  agents: Partial<Record<AgentId, AgentProgress>>;
+}
+
+export interface ReviewProgress {
+  currentPhase: PhaseId;
+  progressPct: number;
+  message: string;
+  agents: Record<AgentId, AgentProgress>;
+  phases: Record<PhaseId, "pending" | "running" | "completed">;
+  error?: string;
+}
+
 // --- Decision & Notification types ---
 
 export interface DecisionRequest {

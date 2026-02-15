@@ -16,6 +16,7 @@ Enhanced with the Anthropic prior-auth-review-skill decision rubric:
 import asyncio
 import json
 import logging
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 
 from agent_framework_claude import ClaudeAgent
@@ -472,7 +473,10 @@ def _generate_audit_justification(
     return "\n".join(lines)
 
 
-async def run_multi_agent_review(request_data: dict) -> dict:
+async def run_multi_agent_review(
+    request_data: dict,
+    on_progress: Callable[[dict], Awaitable[None]] | None = None,
+) -> dict:
     """Run the multi-agent prior auth review pipeline.
 
     Phase 1 (parallel): Compliance + Clinical Reviewer
@@ -483,6 +487,7 @@ async def run_multi_agent_review(request_data: dict) -> dict:
     Args:
         request_data: Dict with patient_name, patient_dob, provider_npi,
             diagnosis_codes, procedure_codes, clinical_notes, insurance_id.
+        on_progress: Optional async callback for streaming progress events.
 
     Returns:
         Dict with recommendation, confidence, confidence_level, summary,
@@ -492,6 +497,10 @@ async def run_multi_agent_review(request_data: dict) -> dict:
     """
     start_time = datetime.now(timezone.utc).isoformat()
 
+    async def _emit(event: dict) -> None:
+        if on_progress:
+            await on_progress(event)
+
     # --- Pre-flight: CPT/HCPCS format validation ---
     logger.info("Pre-flight: Validating procedure code formats")
     cpt_validation = validate_procedure_codes(
@@ -500,8 +509,23 @@ async def run_multi_agent_review(request_data: dict) -> dict:
     if not cpt_validation["valid"]:
         logger.warning("CPT validation found invalid codes: %s", cpt_validation["summary"])
 
+    await _emit({
+        "phase": "preflight", "status": "completed", "progress_pct": 5,
+        "message": "CPT/HCPCS format validation complete",
+        "agents": {},
+    })
+
     # --- Phase 1: Parallel — Compliance + Clinical Reviewer ---
     logger.info("Phase 1: Running Compliance and Clinical agents in parallel")
+
+    await _emit({
+        "phase": "phase_1", "status": "running", "progress_pct": 10,
+        "message": "Running Compliance and Clinical agents in parallel",
+        "agents": {
+            "compliance": {"status": "running", "detail": "Checking documentation completeness"},
+            "clinical": {"status": "running", "detail": "Validating codes and extracting clinical evidence"},
+        },
+    })
 
     compliance_task = asyncio.create_task(
         _safe_run("Compliance Agent", run_compliance_review, request_data)
@@ -514,23 +538,79 @@ async def run_multi_agent_review(request_data: dict) -> dict:
         compliance_task, clinical_task
     )
 
+    await _emit({
+        "phase": "phase_1", "status": "completed", "progress_pct": 40,
+        "message": "Compliance and Clinical agents completed",
+        "agents": {
+            "compliance": {
+                "status": "error" if compliance_result.get("error") else "done",
+                "detail": compliance_result.get("error", "Documentation review complete"),
+            },
+            "clinical": {
+                "status": "error" if clinical_result.get("error") else "done",
+                "detail": clinical_result.get("error", "Clinical analysis complete"),
+            },
+        },
+    })
+
     # --- Phase 2: Sequential — Coverage Agent (needs clinical findings) ---
     logger.info("Phase 2: Running Coverage Agent with clinical findings")
+
+    await _emit({
+        "phase": "phase_2", "status": "running", "progress_pct": 45,
+        "message": "Running Coverage Agent with clinical findings",
+        "agents": {
+            "coverage": {"status": "running", "detail": "Verifying provider and assessing coverage criteria"},
+        },
+    })
 
     coverage_result = await _safe_run(
         "Coverage Agent", run_coverage_review, request_data, clinical_result
     )
 
+    await _emit({
+        "phase": "phase_2", "status": "completed", "progress_pct": 70,
+        "message": "Coverage Agent completed",
+        "agents": {
+            "coverage": {
+                "status": "error" if coverage_result.get("error") else "done",
+                "detail": coverage_result.get("error", "Coverage analysis complete"),
+            },
+        },
+    })
+
     # --- Phase 3: Synthesis ---
     logger.info("Phase 3: Synthesizing final recommendation")
+
+    await _emit({
+        "phase": "phase_3", "status": "running", "progress_pct": 75,
+        "message": "Synthesizing final recommendation",
+        "agents": {
+            "synthesis": {"status": "running", "detail": "Applying decision rubric gates"},
+        },
+    })
 
     synthesis = await _run_synthesis(
         request_data, compliance_result, clinical_result, coverage_result,
         cpt_validation,
     )
 
+    await _emit({
+        "phase": "phase_3", "status": "completed", "progress_pct": 90,
+        "message": "Synthesis complete",
+        "agents": {
+            "synthesis": {"status": "done", "detail": "Decision rubric applied"},
+        },
+    })
+
     # --- Phase 4: Audit Trail & Justification ---
     logger.info("Phase 4: Building audit trail and justification document")
+
+    await _emit({
+        "phase": "phase_4", "status": "running", "progress_pct": 92,
+        "message": "Building audit trail and justification document",
+        "agents": {},
+    })
 
     confidence, confidence_level = _compute_confidence(
         compliance_result, clinical_result, coverage_result
@@ -562,6 +642,12 @@ async def run_multi_agent_review(request_data: dict) -> dict:
 
     all_tool_results.extend(clinical_result.get("tool_results", []))
     all_tool_results.extend(coverage_result.get("tool_results", []))
+
+    await _emit({
+        "phase": "phase_4", "status": "completed", "progress_pct": 100,
+        "message": "Review complete",
+        "agents": {},
+    })
 
     return {
         **synthesis,
