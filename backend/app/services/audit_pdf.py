@@ -39,7 +39,7 @@ class _AuditPDF(FPDF):
         self.set_text_color(*_GRAY_TEXT)
         self.cell(
             0, 6,
-            "PRIOR AUTHORIZATION REVIEW — AUDIT JUSTIFICATION",
+            "PRIOR AUTHORIZATION REVIEW -- AUDIT JUSTIFICATION",
             align="C",
         )
         self.ln(4)
@@ -52,7 +52,7 @@ class _AuditPDF(FPDF):
         self.set_y(-20)
         self.set_font("Helvetica", "I", 7)
         self.set_text_color(*_LIGHT_GRAY_TEXT)
-        self.cell(0, 4, "AI-ASSISTED DRAFT — REVIEW REQUIRED", align="C")
+        self.cell(0, 4, "AI-ASSISTED DRAFT -- REVIEW REQUIRED", align="C")
         self.ln(3)
         self.cell(
             0, 4,
@@ -187,10 +187,20 @@ def _table_row(
 
 
 def _safe_str(value) -> str:
-    """Convert value to string, handling None."""
+    """Convert value to string, replacing characters unsupported by Helvetica."""
     if value is None:
         return "N/A"
-    return str(value)
+    s = str(value)
+    # Replace Unicode characters not in the Helvetica (Latin-1) character set
+    s = s.replace("\u2014", "--")   # em dash
+    s = s.replace("\u2013", "-")    # en dash
+    s = s.replace("\u2018", "'")    # left single quote
+    s = s.replace("\u2019", "'")    # right single quote
+    s = s.replace("\u201c", '"')    # left double quote
+    s = s.replace("\u201d", '"')    # right double quote
+    s = s.replace("\u2022", "-")    # bullet
+    s = s.replace("\u2026", "...")  # ellipsis
+    return s
 
 
 def _check_page_space(pdf: FPDF, needed: float) -> None:
@@ -240,7 +250,7 @@ def generate_audit_justification_pdf(
     pdf.set_text_color(*_AMBER_TEXT)
     pdf.multi_cell(
         0, 4,
-        "WARNING: AI-ASSISTED DRAFT — REVIEW REQUIRED. "
+        "WARNING: AI-ASSISTED DRAFT -- REVIEW REQUIRED. "
         "All recommendations are drafts requiring human clinical review. "
         "Coverage policies reflect Medicare LCDs/NCDs only. "
         "Commercial and Medicare Advantage plans may differ.",
