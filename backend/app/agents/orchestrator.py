@@ -25,6 +25,7 @@ from app.agents._parse import parse_json_response
 from app.agents.compliance_agent import run_compliance_review
 from app.agents.clinical_agent import run_clinical_review
 from app.agents.coverage_agent import run_coverage_review
+from app.services.audit_pdf import generate_audit_justification_pdf
 from app.services.cpt_validation import validate_procedure_codes
 
 logger = logging.getLogger(__name__)
@@ -630,6 +631,12 @@ async def run_multi_agent_review(
         audit_trail,
     )
 
+    audit_justification_pdf = generate_audit_justification_pdf(
+        request_data, synthesis,
+        compliance_result, clinical_result, coverage_result,
+        audit_trail,
+    )
+
     # --- Assemble final response ---
     all_tool_results = []
 
@@ -661,6 +668,7 @@ async def run_multi_agent_review(
         },
         "audit_trail": audit_trail,
         "audit_justification": audit_justification,
+        "audit_justification_pdf": audit_justification_pdf,
     }
 
 
@@ -670,6 +678,9 @@ async def _safe_run(agent_name: str, fn, *args) -> dict:
     Returns the agent's result dict on success, or an error dict on failure.
     """
     try:
+        import asyncio
+        loop = asyncio.get_running_loop()
+        print(f"[debug] {agent_name} — event loop: {type(loop).__name__}, policy: {type(asyncio.get_event_loop_policy()).__name__}")
         return await fn(*args)
     except Exception as e:
         import traceback

@@ -11,7 +11,7 @@ The frontend is built with **Next.js** (static export), **shadcn/ui**, and
 Includes a human-in-the-loop **Decision Panel** for accept/override workflow,
 **PDF notification letter generation** (approval and pend via `fpdf2`),
 **CPT/HCPCS format validation**, **real-time agent progress streaming** (SSE),
-**audit justification document download**, and a **sample case** for demo use.
+**audit justification PDF download** (color-coded, professional format), and a **sample case** for demo use.
 
 Incorporates best practices from the
 [Anthropic prior-auth-review-skill](https://github.com/anthropics/healthcare/tree/main/prior-auth-review-skill):
@@ -44,7 +44,7 @@ confidence scoring, progressive gate evaluation, and structured audit trails.
 │  │    ├── Accept / Override                                  │
 │  │    ├── POST /api/decision                                 │
 │  │    └── Letter Preview + PDF Download (.pdf)               │
-│  └── Audit Justification Download (.md)                      │
+│  └── Audit Justification Download (.pdf)                      │
 └──────────────────────┬───────────────────────────────────────┘
                        │  REST (JSON) + SSE (text/event-stream)
 ┌──────────────────────▼───────────────────────────────────────┐
@@ -87,7 +87,7 @@ confidence scoring, progressive gate evaluation, and structured audit trails.
 │  │                                                        │  │
 │  │  Phase 4 ─ AUDIT TRAIL & JUSTIFICATION                 │  │
 │  │  Computes confidence, builds audit trail, generates     │  │
-│  │  structured Markdown audit justification document       │  │
+│  │  audit justification document (Markdown + PDF)          │  │
 │  └────────────────────────────────────────────────────────┘  │
 │                                                              │
 │  ┌────────────────────────────────────────────────────────┐  │
@@ -168,7 +168,9 @@ confidence scoring, progressive gate evaluation, and structured audit trails.
    **Phase 4 — Audit trail and justification**:
    - Computes overall confidence from agent outputs, builds an audit trail
      (data sources, timestamps, metrics), and generates a structured
-     8-section Markdown **audit justification document**.
+     8-section **audit justification document** in both Markdown and
+     professionally formatted **PDF** (via `fpdf2`, with color-coded sections,
+     status tables, and confidence bars).
 
 4. The response is **persisted** in an in-memory review store (keyed by
    `request_id`) for later retrieval via `GET /api/review/{id}` and
@@ -187,8 +189,9 @@ confidence scoring, progressive gate evaluation, and structured audit trails.
    audit trail section, a **tabbed Agent Details** panel showing each agent's
    structured output (compliance checklist, diagnosis validation table with
    billability, criteria assessment grid with confidence bars, etc.), an
-   **Audit Justification Download** button (`.md` file with the full
-   8-section audit document), and a **Decision Panel** for human reviewer
+   **Audit Justification Download** button (`.pdf` with the full
+   8-section audit document — color-coded sections, criterion evaluation
+   tables, and confidence bars), and a **Decision Panel** for human reviewer
    action.
 
 7. The **Decision Panel** supports two flows:
@@ -380,7 +383,9 @@ Computed from: per-criterion confidence (Coverage Agent), extraction confidence
 
 ### Audit Justification Document
 
-The orchestrator generates a structured Markdown audit document with 8 sections:
+The orchestrator generates a structured audit document (Markdown + PDF) with 8 sections.
+The PDF version is professionally formatted with color-coded sections, status-colored
+criterion tables (green/red/amber), confidence bars, and branded headers/footers:
 
 1. **Executive Summary** — patient, provider, decision, confidence
 2. **Medical Necessity Assessment** — provider info, policies, clinical evidence
@@ -429,6 +434,8 @@ prior-auth-maf/
 ├── backend/
 │   ├── .env                              # Environment config (not committed)
 │   ├── requirements.txt                  # Python dependencies
+│   ├── run.py                            # Dev server launcher (ProactorEventLoop for Windows --reload)
+│   ├── _proactor_startup.py              # PYTHONSTARTUP script for uvicorn reload workers (Windows)
 │   ├── test_af_mcp_tool.py              # MCPStreamableHTTPTool test (validates header injection)
 │   ├── test_dump_schemas.py             # Dumps MCP tool schemas from live servers
 │   └── app/
@@ -445,6 +452,7 @@ prior-auth-maf/
 │       │   ├── orchestrator.py           # Multi-agent coordinator + CPT pre-flight + synthesis + audit + review store
 │       │   └── prior_auth_agent.py       # Single-agent mode (all 5 MCP servers)
 │       ├── services/
+│       │   ├── audit_pdf.py              # Audit justification PDF generation (fpdf2) — 8 color-coded sections
 │       │   ├── cpt_validation.py         # CPT/HCPCS format validation + curated lookup table (~30 codes)
 │       │   └── notification.py           # Auth number generation + approval/pend letter templates + PDF (fpdf2)
 │       ├── tools/

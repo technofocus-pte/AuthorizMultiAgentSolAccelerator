@@ -155,6 +155,7 @@ class ReviewResponse(BaseModel):
     agent_results: AgentResults | None = None
     audit_trail: AuditTrail | None = None
     audit_justification: str | None = None
+    audit_justification_pdf: str | None = None  # Base64-encoded PDF
 
 
 # --- Decision & Notification models ---

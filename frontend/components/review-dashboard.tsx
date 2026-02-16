@@ -32,14 +32,28 @@ interface ReviewDashboardProps {
 
 export function ReviewDashboard({ review }: ReviewDashboardProps) {
   function handleDownloadJustification() {
-    if (!review.audit_justification) return;
-    const blob = new Blob([review.audit_justification], { type: "text/markdown" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `audit-justification-${review.request_id.slice(0, 8)}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
+    if (review.audit_justification_pdf) {
+      const byteChars = atob(review.audit_justification_pdf);
+      const byteNumbers = new Uint8Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) {
+        byteNumbers[i] = byteChars.charCodeAt(i);
+      }
+      const blob = new Blob([byteNumbers], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `audit-justification-${review.request_id.slice(0, 8)}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } else if (review.audit_justification) {
+      const blob = new Blob([review.audit_justification], { type: "text/markdown" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `audit-justification-${review.request_id.slice(0, 8)}.md`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
   }
 
   return (
@@ -297,7 +311,7 @@ export function ReviewDashboard({ review }: ReviewDashboardProps) {
       )}
 
       {/* Download audit justification */}
-      {review.audit_justification && (
+      {(review.audit_justification_pdf || review.audit_justification) && (
         <Card className="shadow-sm border border-blue-200 bg-gradient-to-r from-blue-50/60 to-indigo-50/40">
           <CardContent className="py-4">
             <div className="flex items-center justify-between">
@@ -319,7 +333,7 @@ export function ReviewDashboard({ review }: ReviewDashboardProps) {
                 className="border-blue-300 text-blue-700 hover:bg-blue-100 hover:text-blue-800"
               >
                 <Download className="mr-1.5 h-4 w-4" />
-                Download
+                Download PDF
               </Button>
             </div>
           </CardContent>

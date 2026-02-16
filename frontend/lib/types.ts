@@ -150,6 +150,7 @@ export interface ReviewResponse {
   agent_results?: AgentResults;
   audit_trail?: AuditTrail;
   audit_justification?: string;
+  audit_justification_pdf?: string;
 }
 
 // --- Progress tracking types (SSE streaming) ---
