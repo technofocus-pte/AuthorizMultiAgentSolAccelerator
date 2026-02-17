@@ -290,10 +290,11 @@ mcp_tool = MCPStreamableHTTPTool(name="npi", url=NPI_URL, http_client=http_clien
 | **Role** | Documentation completeness validation |
 | **Tools** | None (pure reasoning) |
 | **Input** | Raw PA request data |
-| **Output** | Checklist (7 items), missing items, additional-info requests |
+| **Output** | Checklist (8 items), missing items, additional-info requests |
 
 **Checklist items:** Patient Information, Provider NPI, Insurance ID,
-Diagnosis Codes, Procedure Codes, Clinical Notes Presence, Clinical Notes Quality.
+Diagnosis Codes, Procedure Codes, Clinical Notes Presence, Clinical Notes Quality,
+Insurance Plan Type.
 
 ### Clinical Reviewer Agent
 
@@ -437,7 +438,16 @@ prior-auth-maf/
 │   ├── run.py                            # Dev server launcher (ProactorEventLoop for Windows --reload)
 │   ├── _proactor_startup.py              # PYTHONSTARTUP script for uvicorn reload workers (Windows)
 │   ├── test_af_mcp_tool.py              # MCPStreamableHTTPTool test (validates header injection)
-│   ├── test_dump_schemas.py             # Dumps MCP tool schemas from live servers
+│   ├── test_skills_poc.py               # POC test validating skills + MCP coexistence in MAF
+│   ├── .claude/
+│   │   ├── skills/
+│   │   │   ├── compliance-review/SKILL.md    # Compliance validation skill (8-item checklist)
+│   │   │   ├── clinical-review/SKILL.md      # Clinical review skill (ICD-10 + PubMed + trials)
+│   │   │   ├── coverage-assessment/SKILL.md  # Coverage assessment skill (NPI + CMS policies)
+│   │   │   └── synthesis-decision/SKILL.md   # Synthesis & decision skill (gate-based rubric)
+│   │   └── references/
+│   │       ├── rubric.md                     # Decision policy rubric (shared by synthesis skill)
+│   │       └── output-formats.md             # JSON output schemas for all 4 agents
 │   └── app/
 │       ├── main.py                       # FastAPI app, CORS, router mounts (review + decision)
 │       ├── config.py                     # Settings (API keys, MCP endpoints)
@@ -813,11 +823,15 @@ handles MCP communication internally via `McpHttpServerConfig`.
 ### Add a new agent
 
 1. Create a new file in `backend/app/agents/` (e.g. `pharmacy_agent.py`)
-2. Define focused system instructions and assign relevant MCP servers via `mcp_config.py`
-3. Create the agent with `ClaudeAgent(instructions=..., default_options={"mcp_servers": ...})`
-4. Add the agent call to `orchestrator.py` (parallel or sequential)
-5. Add the agent's result model to `schemas.py` and `AgentResults`
-6. Add a tab for it in `frontend/components/agent-details.tsx`
+2. Create a SKILL.md file in `backend/.claude/skills/<agent-name>/SKILL.md`
+   with the agent's instructions, execution steps, output format, quality
+   checks, and common mistakes to avoid
+3. Define focused system instructions and assign relevant MCP servers via `mcp_config.py`
+4. Create the agent with the `USE_SKILLS` toggle pattern (see existing agents)
+5. Add the agent call to `orchestrator.py` (parallel or sequential)
+6. Add the agent's output schema to `backend/.claude/references/output-formats.md`
+7. Add the agent's result model to `schemas.py` and `AgentResults`
+8. Add a tab for it in `frontend/components/agent-details.tsx`
 
 ### Add a new MCP server
 
@@ -828,10 +842,18 @@ handles MCP communication internally via `McpHttpServerConfig`.
 
 ### Change the decision rubric
 
-Edit `SYNTHESIS_INSTRUCTIONS` in `orchestrator.py` — the gate-based
-evaluation that maps agent findings to APPROVE/PEND outcomes. The gates
-can be reordered, criteria added, or the policy mode changed from LENIENT
-to STRICT (which would allow DENY recommendations).
+In **skills mode** (`USE_SKILLS=true`, default), edit the decision rubric in
+two places:
+- `backend/.claude/skills/synthesis-decision/SKILL.md` — the gate-based
+  evaluation tables and confidence formula used by the Synthesis Agent
+- `backend/.claude/references/rubric.md` — the shared reference file with
+  override permissions, strict mode option, and confidence level definitions
+
+In **prompt mode** (`USE_SKILLS=false`), edit `SYNTHESIS_INSTRUCTIONS` in
+`orchestrator.py` — the inline gate-based evaluation that maps agent findings
+to APPROVE/PEND outcomes. The gates can be reordered, criteria added, or the
+policy mode changed from LENIENT to STRICT (which would allow DENY
+recommendations).
 
 ### Customize notification letters
 
