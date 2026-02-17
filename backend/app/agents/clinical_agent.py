@@ -48,6 +48,10 @@ specific billable code.
 - `get_by_category(chapter, category, valid_for_hipaa_only)` — Get codes \
 by ICD-10-CM chapter (single letter, e.g., 'E') or category (3 chars, \
 e.g., 'E11'). Useful for exploring codes within a clinical area.
+- `get_by_body_system(body_system_code, section_code, valid_for_hipaa_only, limit)` \
+— Get ICD-10-PCS procedure codes for a specific body system. Body system is \
+identified by the second character of the code (fourth for Section F). \
+Useful for finding all procedures related to an anatomical system.
 
 ### PubMed MCP (pubmed)
 - `search(query, max_results)` — Search biomedical literature for \
