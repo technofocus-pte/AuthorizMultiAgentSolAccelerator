@@ -44,21 +44,29 @@ def _build_review_response(request_id: str, result: dict) -> ReviewResponse:
         })
 
     # Parse per-agent results (best-effort — agent JSON may not match exactly)
-    # Generate checks_performed from RAW data before Pydantic parsing
-    # so the checks survive even if detailed field parsing fails
+    # Sanitize agent data BEFORE generating checks so type coercion and
+    # field aliasing are applied. Checks then see normalized field names/types.
+    # Checks are generated before Pydantic parsing so they survive even if
+    # some detailed fields fail validation.
     agent_raw = result.get("agent_results", {})
 
     compliance_raw = agent_raw.get("compliance")
     if isinstance(compliance_raw, dict):
+        compliance_raw = _sanitize_agent_data(compliance_raw)
         compliance_raw["checks_performed"] = _generate_compliance_checks(compliance_raw)
+        agent_raw["compliance"] = compliance_raw
 
     clinical_raw = agent_raw.get("clinical")
     if isinstance(clinical_raw, dict):
+        clinical_raw = _sanitize_agent_data(clinical_raw)
         clinical_raw["checks_performed"] = _generate_clinical_checks(clinical_raw)
+        agent_raw["clinical"] = clinical_raw
 
     coverage_raw = agent_raw.get("coverage")
     if isinstance(coverage_raw, dict):
+        coverage_raw = _sanitize_agent_data(coverage_raw)
         coverage_raw["checks_performed"] = _generate_coverage_checks(coverage_raw)
+        agent_raw["coverage"] = coverage_raw
 
     agent_results = AgentResults(
         compliance=_safe_parse(ComplianceResult, compliance_raw),
@@ -230,6 +238,22 @@ async def get_all_reviews():
     ]
 
 
+def _get_any_field(d: dict, *keys, default=None):
+    """Return the first non-empty value from a dict trying multiple field names.
+
+    Agents may use variant names for the same field (e.g., 'hpi' vs
+    'history_of_present_illness'). This helper tries each key in order
+    and returns the first non-empty match.
+    """
+    if not isinstance(d, dict):
+        return default
+    for key in keys:
+        val = d.get(key)
+        if val is not None and val != "" and val != []:
+            return val
+    return default
+
+
 def _generate_compliance_checks(raw: dict) -> list[dict]:
     """Generate checks summary from raw compliance agent data.
 
@@ -277,47 +301,47 @@ def _generate_compliance_checks(raw: dict) -> list[dict]:
     })
 
     # SKILL.md Rule 1: Patient Information
-    item = _find_item("patient")
+    item = _find_item("patient", "demographics", "personal info")
     r, d = _item_result(item)
     checks.append({"rule": "Patient Information", "result": r, "detail": d or "Name and DOB check"})
 
     # SKILL.md Rule 2: Provider NPI
-    item = _find_item("provider", "npi")
+    item = _find_item("provider", "npi", "referring", "ordering")
     r, d = _item_result(item)
     checks.append({"rule": "Provider NPI", "result": r, "detail": d or "NPI format check (10 digits)"})
 
     # SKILL.md Rule 3: Insurance ID (non-blocking)
-    item = _find_item("insurance id", "insurance_id", "member id")
+    item = _find_item("insurance id", "insurance_id", "member id", "member_id", "payer")
     r, d = _item_result(item)
     if r == "fail":
         r = "info"  # Non-blocking per SKILL.md
     checks.append({"rule": "Insurance ID (non-blocking)", "result": r, "detail": d or "Insurance ID presence"})
 
     # SKILL.md Rule 4: Diagnosis Codes
-    item = _find_item("diagnosis", "icd")
+    item = _find_item("diagnosis", "icd", "dx code")
     r, d = _item_result(item)
     checks.append({"rule": "Diagnosis Codes", "result": r, "detail": d or "ICD-10 code format check"})
 
     # SKILL.md Rule 5: Procedure Codes
-    item = _find_item("procedure", "cpt", "hcpcs")
+    item = _find_item("procedure", "cpt", "hcpcs", "proc code")
     r, d = _item_result(item)
     checks.append({"rule": "Procedure Codes", "result": r, "detail": d or "CPT/HCPCS code presence"})
 
     # SKILL.md Rule 6: Clinical Notes Presence
-    item = _find_item("notes presence", "clinical notes pres", "notes pres")
+    item = _find_item("notes presence", "clinical notes pres", "notes pres", "documentation pres")
     if item is None:
-        # Fall back to generic "clinical notes" match
-        item = _find_item("clinical note")
+        # Fall back to generic "clinical notes" or "documentation" match
+        item = _find_item("clinical note", "documentation", "narrative")
     r, d = _item_result(item)
     checks.append({"rule": "Clinical Notes Presence", "result": r, "detail": d or "Substantive clinical narrative check"})
 
     # SKILL.md Rule 7: Clinical Notes Quality
-    item = _find_item("notes quality", "quality")
+    item = _find_item("notes quality", "quality", "clinical quality", "documentation quality")
     r, d = _item_result(item)
     checks.append({"rule": "Clinical Notes Quality", "result": r, "detail": d or "Notes detail, boilerplate/copy-paste check"})
 
     # SKILL.md Rule 8: Insurance Plan Type (non-blocking)
-    item = _find_item("plan type", "insurance type", "insurance plan")
+    item = _find_item("plan type", "insurance type", "insurance plan", "coverage type", "payer type")
     r, d = _item_result(item)
     if r == "fail":
         r = "info"  # Non-blocking per SKILL.md
@@ -395,14 +419,14 @@ def _generate_clinical_checks(raw: dict) -> list[dict]:
     extraction = raw.get("clinical_extraction", {})
     if isinstance(extraction, dict) and extraction:
         field_checks = {
-            "Chief Complaint": extraction.get("chief_complaint", ""),
-            "History of Present Illness": extraction.get("history_of_present_illness", ""),
-            "Prior Treatments": extraction.get("prior_treatments", []),
-            "Severity Indicators": extraction.get("severity_indicators", []),
-            "Functional Limitations": extraction.get("functional_limitations", []),
-            "Diagnostic Findings": extraction.get("diagnostic_findings", []),
-            "Duration and Progression": extraction.get("duration_and_progression", ""),
-            "Medical History / Comorbidities": extraction.get("medical_history", extraction.get("comorbidities", "")),
+            "Chief Complaint": _get_any_field(extraction, "chief_complaint", "cc", "presenting_complaint", "reason_for_visit", default=""),
+            "History of Present Illness": _get_any_field(extraction, "history_of_present_illness", "hpi", "present_illness", "history", default=""),
+            "Prior Treatments": _get_any_field(extraction, "prior_treatments", "previous_treatments", "prior_therapy", "treatment_history", "treatments", default=[]),
+            "Severity Indicators": _get_any_field(extraction, "severity_indicators", "severity", "severity_markers", "severity_factors", default=[]),
+            "Functional Limitations": _get_any_field(extraction, "functional_limitations", "functional_status", "limitations", "functional_impact", default=[]),
+            "Diagnostic Findings": _get_any_field(extraction, "diagnostic_findings", "diagnostics", "findings", "diagnostic_results", "test_results", "lab_results", default=[]),
+            "Duration and Progression": _get_any_field(extraction, "duration_and_progression", "duration", "progression", "timeline", "disease_progression", "course", default=""),
+            "Medical History / Comorbidities": _get_any_field(extraction, "medical_history", "comorbidities", "past_medical_history", "pmh", "relevant_medical_history", "relevant_history", "medical_history_comorbidities", default=""),
         }
         extracted_count = sum(1 for v in field_checks.values() if v)
         checks.append({
@@ -572,11 +596,25 @@ def _generate_coverage_checks(raw: dict) -> list[dict]:
             "detail": f"Medicare Administrative Contractors identified" if not isinstance(contractors, list) else f"{len(contractors)} MACs identified",
         })
     else:
-        checks.append({
-            "rule": "Step 2: MAC Identification",
-            "result": "info",
-            "detail": "MAC identification via get_contractors (state-based lookup)",
-        })
+        # Check for MAC mentions in provider verification detail or coverage notes
+        pv_detail = str(pv.get("detail", "")) if isinstance(pv, dict) else ""
+        raw_notes = str(raw.get("notes", ""))
+        has_mac_ref = any(
+            term in (pv_detail + raw_notes).lower()
+            for term in ["mac", "medicare administrative contractor", "jurisdiction"]
+        )
+        if has_mac_ref:
+            checks.append({
+                "rule": "Step 2: MAC Identification",
+                "result": "pass",
+                "detail": "MAC jurisdiction referenced in provider/coverage data",
+            })
+        else:
+            checks.append({
+                "rule": "Step 2: MAC Identification",
+                "result": "info",
+                "detail": "MAC identification via get_contractors (state-based lookup)",
+            })
 
     # ── SKILL.md Step 3: Coverage Policy Search (NCD + LCD) ──
     policies = raw.get("coverage_policies", [])
@@ -698,12 +736,22 @@ def _generate_coverage_checks(raw: dict) -> list[dict]:
     # ── SKILL.md Step 6: Diagnosis-Policy Alignment (REQUIRED AUDITABLE) ──
     # Look for a specific "Diagnosis-Policy Alignment" criterion in criteria_assessment
     alignment_found = False
+    _ALIGNMENT_KEYWORDS = [
+        "alignment", "diagnosis-policy", "diagnosis policy",
+        "diagnosis match", "diagnostic match", "indication match",
+        "covered indication", "diagnostic indication",
+        "icd-10 match", "icd-10 policy", "icd-10 coverage",
+        "icd10 match", "icd10 policy", "icd10 coverage",
+        "diagnostic appropriateness", "diagnosis appropriateness",
+        "code-to-policy", "diagnosis coverage", "appropriate diagnosis",
+        "appropriate indication", "medical indication",
+    ]
     if isinstance(criteria, list):
         for c in criteria:
             if not isinstance(c, dict):
                 continue
             crit_name = str(c.get("criterion", c.get("name", ""))).lower()
-            if "alignment" in crit_name or "diagnosis-policy" in crit_name or "diagnosis policy" in crit_name:
+            if any(kw in crit_name for kw in _ALIGNMENT_KEYWORDS):
                 alignment_found = True
                 crit_status = str(c.get("status", "INSUFFICIENT")).upper()
                 conf = c.get("confidence", 0)

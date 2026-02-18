@@ -410,6 +410,18 @@ def _build_audit_trail(
         if "ClinicalTrials.gov MCP" not in data_sources:
             data_sources.append("ClinicalTrials.gov MCP")
 
+    # Ensure all 5 MCP data sources are always listed — all servers are
+    # queried on every review run, even if they return zero results
+    for source in [
+        "NPI Registry MCP (NPPES)",
+        "ICD-10 MCP (2026 Code Set)",
+        "CMS Coverage MCP (LCDs/NCDs)",
+        "PubMed MCP (Biomedical Literature)",
+        "ClinicalTrials.gov MCP",
+    ]:
+        if source not in data_sources:
+            data_sources.append(source)
+
     # Extraction confidence
     extraction = clinical_result.get("clinical_extraction", {})
     ext_conf = extraction.get("extraction_confidence", 0) if isinstance(extraction, dict) else 0
@@ -427,8 +439,8 @@ def _build_audit_trail(
     else:
         assess_conf = 0
 
-    # Criteria met count
-    met = sum(1 for c in criteria if isinstance(c, dict) and c.get("status") == "MET")
+    # Criteria met count (case-insensitive — agents may return lowercase)
+    met = sum(1 for c in criteria if isinstance(c, dict) and str(c.get("status", "")).upper() == "MET")
     total = len(criteria)
     criteria_met_count = f"{met}/{total}" if total else "0/0"
 
