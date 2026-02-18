@@ -217,26 +217,25 @@ async def get_all_reviews():
 def _safe_parse(model_class, data):
     """Attempt to parse a dict into a Pydantic model, return None on failure.
 
-    Three-stage approach:
-    1. Direct validation (fast path for well-formed agent data)
-    2. Sanitized validation (handles common type mismatches from LLM-generated JSON)
-    3. Minimal fallback (preserves agent_name and error fields)
+    Two-stage approach:
+    1. Sanitize (field aliasing + type coercion) then validate
+    2. Minimal fallback (preserves agent_name and error fields)
+
+    Sanitization always runs first because models use defaults for all fields,
+    so direct validation would succeed with empty values for misnamed fields.
     """
     if not data or not isinstance(data, dict):
         return None
-    try:
-        return model_class.model_validate(data)
-    except Exception as e:
-        logger.warning("Parse %s failed (stage 1): %s", model_class.__name__, e)
 
-    # Stage 2: sanitize and retry
+    # Always sanitize first to handle field aliasing and type coercion
     try:
         sanitized = _sanitize_agent_data(data)
         return model_class.model_validate(sanitized)
     except Exception as e:
-        logger.warning("Parse %s failed (stage 2 sanitized): %s", model_class.__name__, e)
+        logger.warning("Parse %s failed: %s", model_class.__name__, e)
+        logger.info("Parse %s data keys: %s", model_class.__name__, list(data.keys()))
 
-    # Stage 3: minimal model with error info
+    # Fallback: minimal model with error info
     try:
         minimal = {}
         if "agent_name" in data:
@@ -258,6 +257,7 @@ def _sanitize_agent_data(data: dict) -> dict:
     - bool fields as "Yes"/"No"/"true"/"false" strings
     - int fields as "85%" strings or 0.85 floats
     - evidence fields as strings instead of lists
+    - field names that differ from the expected schema
 
     This function normalizes these before Pydantic validation.
     """
@@ -289,13 +289,64 @@ def _sanitize_agent_data(data: dict) -> dict:
         if key in result and not isinstance(result[key], bool):
             result[key] = _coerce_bool(result[key])
 
-    # Field aliasing — agents may use different names for the same field
+    # --- Field aliasing — agents may use different names for the same field ---
+    # NOTE: aliasing must be context-aware since _sanitize_agent_data runs
+    # recursively on all dicts (tool_results, criteria, gaps, etc.)
+
     # DocumentationGap: "what" is required but agent may return "description"
-    if "description" in result and "what" not in result:
-        result["what"] = result.pop("description")
-    # CriterionAssessment: "criterion" is required but agent may use "name"
-    if "name" in result and "criterion" not in result:
-        result["criterion"] = result.pop("name")
+    # or "gap", "gap_description", "finding", "issue"
+    if "what" not in result:
+        for alias in ("description", "gap", "gap_description", "finding", "issue"):
+            if alias in result:
+                result["what"] = result.pop(alias)
+                break
+
+    # CriterionAssessment: "criterion" — only remap "name" if dict looks like
+    # a criterion (has confidence/evidence/met fields, not a tool result)
+    if "criterion" not in result:
+        is_criterion_like = any(k in result for k in ("confidence", "evidence", "met", "notes"))
+        aliases = ["criteria_name", "criteria", "requirement"]
+        if is_criterion_like:
+            aliases.insert(0, "name")  # Only use "name" for criterion-like dicts
+        for alias in aliases:
+            if alias in result:
+                result["criterion"] = result.pop(alias)
+                break
+
+    # ToolResult: "tool_name" — only remap "name" if dict looks like a tool
+    # result (has detail or status but NOT criterion-specific fields)
+    if "tool_name" not in result:
+        is_tool_like = "detail" in result or ("status" in result and not any(
+            k in result for k in ("confidence", "evidence", "met", "notes")
+        ))
+        aliases = ["tool"]
+        if is_tool_like:
+            aliases.insert(0, "name")  # Only use "name" for tool-like dicts
+        for alias in aliases:
+            if alias in result:
+                result["tool_name"] = result.pop(alias)
+                break
+
+    # CoveragePolicy: "policy_id" is expected but agent may use "id" or "document_id"
+    if "policy_id" not in result:
+        for alias in ("id", "document_id", "ncd_id", "lcd_id"):
+            if alias in result:
+                result["policy_id"] = result.pop(alias)
+                break
+
+    # LiteratureReference: "pmid" may be absent or returned as "id" or "pubmed_id"
+    if "pmid" not in result:
+        for alias in ("id", "pubmed_id", "article_id"):
+            if alias in result:
+                result["pmid"] = str(result.pop(alias))
+                break
+
+    # ClinicalTrialReference: "nct_id" may be "id" or "trial_id"
+    if "nct_id" not in result:
+        for alias in ("id", "trial_id"):
+            if alias in result:
+                result["nct_id"] = str(result.pop(alias))
+                break
 
     # Recursively sanitize known nested dicts
     for nested_key in ("clinical_extraction", "provider_verification"):

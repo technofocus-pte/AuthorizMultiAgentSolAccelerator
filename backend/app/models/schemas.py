@@ -12,18 +12,18 @@ class PriorAuthRequest(BaseModel):
 
 
 class ToolResult(BaseModel):
-    tool_name: str
-    status: str  # "pass", "fail", "warning"
-    detail: str
+    tool_name: str = ""
+    status: str = "warning"  # "pass", "fail", "warning"
+    detail: str = ""
 
 
 # --- Per-agent result models ---
 
 
 class ChecklistItem(BaseModel):
-    item: str
-    status: str  # "complete", "incomplete", "missing"
-    detail: str
+    item: str = ""
+    status: str = "incomplete"  # "complete", "incomplete", "missing"
+    detail: str = ""
 
 
 class ComplianceResult(BaseModel):
@@ -36,8 +36,8 @@ class ComplianceResult(BaseModel):
 
 
 class DiagnosisValidation(BaseModel):
-    code: str
-    valid: bool
+    code: str = ""
+    valid: bool = False
     description: str = ""
     billable: bool = False
 
@@ -54,7 +54,7 @@ class ClinicalExtraction(BaseModel):
 
 
 class LiteratureReference(BaseModel):
-    title: str
+    title: str = ""
     pmid: str = ""
     relevance: str = ""
 
@@ -86,14 +86,14 @@ class ProviderVerification(BaseModel):
 
 
 class CoveragePolicy(BaseModel):
-    policy_id: str
+    policy_id: str = ""
     title: str = ""
     type: str = ""  # "LCD", "NCD"
     relevant: bool = True
 
 
 class CriterionAssessment(BaseModel):
-    criterion: str
+    criterion: str = ""
     status: str = "INSUFFICIENT"  # "MET", "NOT_MET", "INSUFFICIENT"
     confidence: int = 0  # 0-100 per-criterion confidence
     evidence: list[str] = []
@@ -104,7 +104,7 @@ class CriterionAssessment(BaseModel):
 
 
 class DocumentationGap(BaseModel):
-    what: str
+    what: str = ""
     critical: bool = False
     request: str = ""
 

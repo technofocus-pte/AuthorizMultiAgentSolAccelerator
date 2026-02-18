@@ -354,50 +354,61 @@ def _build_audit_trail(
     """Build audit trail from agent results."""
     data_sources = ["CPT/HCPCS Format Validation (Local)"]
 
-    # Check which MCP tools were used
+    # Check which MCP tools were used via tool_results
     for result in [clinical_result, coverage_result]:
         for tr in result.get("tool_results", []):
             tool = tr.get("tool_name", "")
-            if "npi" in tool.lower():
+            tool_lower = tool.lower()
+            if "npi" in tool_lower:
                 source = "NPI Registry MCP (NPPES)"
-            elif "icd10" in tool.lower() or "validate_code" in tool.lower() or "lookup_code" in tool.lower():
+            elif "icd10" in tool_lower or "icd-10" in tool_lower or "validate_code" in tool_lower or "lookup_code" in tool_lower:
                 source = "ICD-10 MCP (2026 Code Set)"
-            elif "coverage" in tool.lower() or "cms" in tool.lower():
+            elif "coverage" in tool_lower or "cms" in tool_lower or "lcd" in tool_lower or "ncd" in tool_lower:
                 source = "CMS Coverage MCP (LCDs/NCDs)"
-            elif "search" in tool.lower() or "pubmed" in tool.lower():
+            elif "trial" in tool_lower or "clinical_trial" in tool_lower or "clinical-trial" in tool_lower:
+                source = "ClinicalTrials.gov MCP"
+            elif "pubmed" in tool_lower:
+                source = "PubMed MCP (Biomedical Literature)"
+            elif "search" in tool_lower:
+                # Generic "search" — likely PubMed search
                 source = "PubMed MCP (Biomedical Literature)"
             else:
                 source = f"MCP Tool: {tool}"
             if source not in data_sources:
                 data_sources.append(source)
 
-    # If agents didn't report tool_results, infer data sources from result data
-    if len(data_sources) <= 1:
-        # If provider verification has data, NPI registry was used
-        pv = coverage_result.get("provider_verification", {})
-        if pv and isinstance(pv, dict) and pv.get("npi"):
-            if "NPI Registry MCP (NPPES)" not in data_sources:
-                data_sources.append("NPI Registry MCP (NPPES)")
-        # If diagnosis validation has data, ICD-10 MCP was used
-        dx = clinical_result.get("diagnosis_validation", [])
-        if dx:
-            if "ICD-10 MCP (2026 Code Set)" not in data_sources:
-                data_sources.append("ICD-10 MCP (2026 Code Set)")
-        # If coverage policies found, CMS Coverage MCP was used
-        policies = coverage_result.get("coverage_policies", [])
-        if policies:
-            if "CMS Coverage MCP (LCDs/NCDs)" not in data_sources:
-                data_sources.append("CMS Coverage MCP (LCDs/NCDs)")
-        # If literature support found, PubMed was used
-        lit = clinical_result.get("literature_support", [])
-        if lit:
-            if "PubMed MCP (Biomedical Literature)" not in data_sources:
-                data_sources.append("PubMed MCP (Biomedical Literature)")
-        # If clinical trials found, ClinicalTrials.gov was used
-        trials = clinical_result.get("clinical_trials", [])
-        if trials:
-            if "ClinicalTrials.gov MCP" not in data_sources:
-                data_sources.append("ClinicalTrials.gov MCP")
+    # Always infer data sources from result data to supplement tool_results
+    # (agents may not always report tool_results for every MCP call)
+
+    # If provider verification has data, NPI registry was used
+    pv = coverage_result.get("provider_verification", {})
+    if pv and isinstance(pv, dict) and pv.get("npi"):
+        if "NPI Registry MCP (NPPES)" not in data_sources:
+            data_sources.append("NPI Registry MCP (NPPES)")
+
+    # If diagnosis validation has data, ICD-10 MCP was used
+    dx = clinical_result.get("diagnosis_validation", [])
+    if dx:
+        if "ICD-10 MCP (2026 Code Set)" not in data_sources:
+            data_sources.append("ICD-10 MCP (2026 Code Set)")
+
+    # If coverage policies found, CMS Coverage MCP was used
+    policies = coverage_result.get("coverage_policies", [])
+    if policies:
+        if "CMS Coverage MCP (LCDs/NCDs)" not in data_sources:
+            data_sources.append("CMS Coverage MCP (LCDs/NCDs)")
+
+    # If literature support found, PubMed was used
+    lit = clinical_result.get("literature_support", [])
+    if lit:
+        if "PubMed MCP (Biomedical Literature)" not in data_sources:
+            data_sources.append("PubMed MCP (Biomedical Literature)")
+
+    # If clinical trials found, ClinicalTrials.gov was used
+    trials = clinical_result.get("clinical_trials", [])
+    if trials:
+        if "ClinicalTrials.gov MCP" not in data_sources:
+            data_sources.append("ClinicalTrials.gov MCP")
 
     # Extraction confidence
     extraction = clinical_result.get("clinical_extraction", {})
