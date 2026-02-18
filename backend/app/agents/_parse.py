@@ -59,6 +59,27 @@ def parse_json_response(response) -> dict:
         fences = fence_pattern.findall(text)
         if fences:
             logger.info("[parse] Strategy 1 (fence pattern %d): found %d fences", pat_idx, len(fences))
+
+            # If multiple fences found, try to merge all valid JSON dicts.
+            # Agents often split output across multiple ```json blocks
+            # (e.g., code_validation, clinical_extraction, procedure_assessment).
+            # Merging gives a complete result instead of just the last block.
+            if len(fences) > 1:
+                merged = {}
+                merge_count = 0
+                for candidate in fences:
+                    parsed = _try_parse(candidate)
+                    if parsed is None:
+                        parsed = _try_parse(_cleanup_json(candidate))
+                    if parsed is not None:
+                        merged.update(parsed)
+                        merge_count += 1
+                if merged and merge_count > 1:
+                    logger.info("[parse] Strategy 1: merged %d/%d fence blocks into %d keys",
+                                merge_count, len(fences), len(merged))
+                    return merged
+
+            # Single fence or merge didn't work — fall back to last-fence
             for idx, candidate in enumerate(reversed(fences)):
                 parsed = _try_parse(candidate)
                 if parsed is not None:

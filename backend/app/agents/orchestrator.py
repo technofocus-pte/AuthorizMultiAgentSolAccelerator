@@ -20,6 +20,7 @@ Supports two modes (controlled by USE_SKILLS env var):
 import asyncio
 import json
 import logging
+import os
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 from pathlib import Path
@@ -737,6 +738,10 @@ async def run_multi_agent_review(
         compliance_task, clinical_task
     )
 
+    # Diagnostic: dump agent result keys and sample values for debugging
+    _dump_agent_result("Compliance", compliance_result)
+    _dump_agent_result("Clinical", clinical_result)
+
     await _emit({
         "phase": "phase_1", "status": "completed", "progress_pct": 40,
         "message": "Compliance and Clinical agents completed",
@@ -769,6 +774,9 @@ async def run_multi_agent_review(
 
     # Normalize coverage result (fix provider data format, etc.)
     coverage_result = _normalize_coverage_result(coverage_result)
+
+    # Diagnostic: dump coverage agent result
+    _dump_agent_result("Coverage", coverage_result)
 
     await _emit({
         "phase": "phase_2", "status": "completed", "progress_pct": 70,
@@ -908,25 +916,72 @@ async def run_multi_agent_review(
     }
 
 
+def _dump_agent_result(agent_name: str, result: dict) -> None:
+    """Diagnostic: save agent raw dict to a temp file for inspection."""
+    try:
+        import tempfile
+        dump_path = Path(tempfile.gettempdir()) / f"agent_raw_{agent_name.lower().replace(' ', '_')}.json"
+        with open(dump_path, "w", encoding="utf-8") as f:
+            json.dump(result, f, indent=2, default=str, ensure_ascii=False)
+        logger.info("[DIAG] Saved %s raw result (%d keys) to %s", agent_name, len(result), dump_path)
+    except Exception as e:
+        logger.warning("[DIAG] Failed to save %s dump: %s", agent_name, e)
+
+
 async def _safe_run(agent_name: str, fn, *args) -> dict:
     """Run an agent function with error handling.
+
+    On Windows, if the running event loop is a SelectorEventLoop (which
+    uvicorn --reload may create), subprocess execution will fail. In that
+    case, run the agent in a separate thread with its own ProactorEventLoop.
 
     Returns the agent's result dict on success, or an error dict on failure.
     """
     try:
-        import asyncio
         loop = asyncio.get_running_loop()
-        print(f"[debug] {agent_name} — event loop: {type(loop).__name__}, policy: {type(asyncio.get_event_loop_policy()).__name__}")
+        loop_type = type(loop).__name__
+        policy_type = type(asyncio.get_event_loop_policy()).__name__
+        logger.info("[debug] %s — event loop: %s, policy: %s", agent_name, loop_type, policy_type)
+
+        # If running on a SelectorEventLoop, subprocess_exec won't work.
+        # Run the agent in a separate thread with a ProactorEventLoop.
+        if isinstance(loop, asyncio.SelectorEventLoop) and os.name == "nt":
+            logger.info("[debug] %s — SelectorEventLoop detected, using thread-based ProactorEventLoop", agent_name)
+            return await _run_in_proactor_thread(agent_name, fn, *args)
+
         return await fn(*args)
     except Exception as e:
         import traceback
         tb = traceback.format_exc()
-        print(f"\n{'='*60}")
-        print(f"[ERROR] {agent_name} failed:")
-        print(tb)
-        print(f"{'='*60}\n")
-        logger.error("%s failed: %s", agent_name, e)
+        logger.error("%s failed:\n%s", agent_name, tb)
         return {"error": str(e), "tool_results": []}
+
+
+async def _run_in_proactor_thread(agent_name: str, fn, *args) -> dict:
+    """Run an async agent function in a separate thread with ProactorEventLoop.
+
+    This is the workaround for Windows uvicorn --reload creating a
+    SelectorEventLoop which doesn't support subprocess creation.
+    """
+    import concurrent.futures
+
+    def _thread_target():
+        """Create a ProactorEventLoop in this thread and run the agent."""
+        proactor_loop = asyncio.ProactorEventLoop()
+        asyncio.set_event_loop(proactor_loop)
+        try:
+            return proactor_loop.run_until_complete(fn(*args))
+        finally:
+            proactor_loop.close()
+
+    # Run in a thread pool to avoid blocking the main event loop
+    loop = asyncio.get_running_loop()
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=1, thread_name_prefix=f"agent-{agent_name}"
+    ) as executor:
+        result = await loop.run_in_executor(executor, _thread_target)
+
+    return result
 
 
 async def _run_synthesis(
@@ -1003,7 +1058,9 @@ Procedure Codes: {', '.join(request_data['procedure_codes'])}
 Evaluate the decision gates in order. Compute the confidence score and level.
 Produce your structured JSON recommendation."""
 
-    async with agent:
-        response = await agent.run(prompt)
+    async def _do_synthesis():
+        async with agent:
+            response = await agent.run(prompt)
+        return parse_json_response(response)
 
-    return parse_json_response(response)
+    return await _safe_run("Synthesis Agent", _do_synthesis)

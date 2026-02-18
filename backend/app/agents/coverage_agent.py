@@ -289,13 +289,4 @@ Return your structured JSON assessment."""
     async with agent:
         response = await agent.run(prompt)
 
-    # Diagnostic: log response before parsing
-    _text = response.text if hasattr(response, "text") else str(response)
-    print(f"[debug] Coverage Agent response: type={type(response).__name__}, text_len={len(_text)}")
-    if len(_text) < 500:
-        print(f"[debug] Coverage Agent full text: {_text}")
-    else:
-        print(f"[debug] Coverage Agent first 300: {_text[:300]}")
-        print(f"[debug] Coverage Agent last 300: {_text[-300:]}")
-
     return parse_json_response(response)

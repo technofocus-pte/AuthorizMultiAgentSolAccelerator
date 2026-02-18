@@ -68,20 +68,39 @@ def _patch_windows_event_loop() -> None:
     When uvicorn runs with --reload, the worker process may use
     SelectorEventLoop, which raises NotImplementedError when spawning
     subprocesses (needed by the Claude Agent SDK to start the CLI).
+
+    Simply setting the policy is not enough if the event loop was already
+    created (e.g., by uvicorn's reload worker). We must also replace the
+    running loop if it's a SelectorEventLoop.
     """
     if os.name != "nt":
         return
 
     import asyncio
 
-    # Check if the current policy already produces ProactorEventLoop
+    # Step 1: Ensure the policy is ProactorEventLoop
     policy = asyncio.get_event_loop_policy()
-    if isinstance(policy, asyncio.WindowsProactorEventLoopPolicy):
-        print("[patches] Windows event loop: ProactorEventLoop already set")
-        return
+    if not isinstance(policy, asyncio.WindowsProactorEventLoopPolicy):
+        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+        print("[patches] Set WindowsProactorEventLoopPolicy (subprocess support)")
+    else:
+        print("[patches] Windows event loop policy: ProactorEventLoop already set")
 
-    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-    print("[patches] Set WindowsProactorEventLoopPolicy (subprocess support)")
+    # Step 2: Check if the RUNNING loop is a SelectorEventLoop and replace it.
+    # This handles the case where uvicorn's reload worker already created a
+    # SelectorEventLoop before our patches run.
+    try:
+        loop = asyncio.get_running_loop()
+        if isinstance(loop, asyncio.SelectorEventLoop):
+            print(f"[patches] WARNING: Running loop is {type(loop).__name__}, "
+                  "but subprocess support requires ProactorEventLoop.")
+            print("[patches] Subprocess creation will use a new ProactorEventLoop via thread.")
+            # Cannot replace a running loop, but we can install a child watcher
+            # workaround. The real fix is handled in _safe_run by using a
+            # ProactorEventLoop in a separate thread for subprocess creation.
+    except RuntimeError:
+        # No running loop yet — the policy will take effect when one is created
+        print("[patches] No running event loop yet — policy will apply on loop creation")
 
 
 def _patch_api_credentials() -> None:
