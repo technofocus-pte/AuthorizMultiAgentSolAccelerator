@@ -1519,27 +1519,44 @@ agent = ClaudeAgent(
 The helper strips UI-only fields (`agent_name`, `checks_performed`) from
 the schema so the LLM focuses on domain-specific fields rather than
 dumping data into flexible catch-all arrays. Unused `$defs` entries are
-also removed to keep the schema compact.
+also removed to keep the schema compact. The `_make_strict()` function
+then recursively adds `additionalProperties: false` and `required` lists
+to every object node, preventing the LLM from inventing custom field names.
 
-`parse_json_response()` checks `response.structured_output` first
-(Strategy 0) before falling back to text-based JSON parsing strategies.
-This gives deterministic parsing when structured output is available.
+**JSON output enforcement:**
 
-**Effectiveness by agent type:**
+The `output_format` option is passed to the Claude Code CLI as `--json-schema`,
+which provides schema guidance at the model level. However, due to a known
+limitation in `agent_framework_claude` (the `structured_output` field from the
+CLI's `ResultMessage` is not propagated to `AgentResponse`), the structured
+output cannot be accessed programmatically.
 
-| Agent | Tools | Structured output | Notes |
-|-------|-------|-------------------|-------|
-| Compliance | None | Works reliably | Schema fully enforced |
-| Synthesis | None (or Skill only) | Works reliably | Schema fully enforced |
-| Clinical | ICD-10, PubMed, Clinical Trials MCP | Partial | Multi-turn tool conversations prevent strict enforcement |
-| Coverage | NPI Registry, CMS Coverage MCP | Partial | Multi-turn tool conversations prevent strict enforcement |
+As a workaround, all agent instructions include a mandate to respond with
+JSON inside a `` ```json `` code fence:
 
-For agents with MCP tools, the `_sanitize_agent_data()` normalizer in
-`review.py` remains essential as a fallback. It handles field name
-aliasing (the LLM may use variant names like `prior_treatment` vs
-`prior_treatments`), type coercion (strings to lists, dicts to flat
-values), and deep extraction of nested structures that don't match the
-expected flat schema.
+```
+CRITICAL: Your FINAL response MUST be a single valid JSON object
+inside a ```json code fence. No markdown commentary outside the fence.
+```
+
+`parse_json_response()` uses a multi-strategy approach:
+
+| Strategy | Method | Status |
+|----------|--------|--------|
+| Strategy 0 | `response.structured_output` | Blocked by framework bug — ready to use when fixed |
+| **Strategy 1** | **Markdown code fence extraction** | **Primary path — used by all agents** |
+| Strategy 2 | Brace-matched backward extraction | Fallback |
+| Strategy 3 | First-`{` to last-`}` substring | Legacy fallback |
+
+**Lightweight adapters:**
+
+For robustness against remaining LLM output variations,
+`_adapt_clinical_output()` and `_adapt_coverage_output()` in `review.py`
+handle known patterns such as wrapper objects (`prior_authorization_review`,
+`coverage_assessment`), variant field names (`icd10_code_validation` vs
+`diagnosis_validation`), and nested sub-structures (`provider_details`,
+`specialty_verification`). These lightweight adapters (~200 lines total)
+normalize agent output before Pydantic validation.
 
 ### Decision & notification flow
 
