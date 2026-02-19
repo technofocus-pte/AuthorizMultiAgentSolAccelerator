@@ -136,19 +136,21 @@ confidence scoring, progressive gate evaluation, and structured audit trails.
    - Results are injected into the synthesis prompt for Gate 2 evaluation
 
    **Phase 1 — Parallel execution** (`asyncio.gather`):
-   - **Compliance Agent** (no tools) — validates documentation completeness
+   - **Compliance Agent** (no tools, `max_turns=5`) — validates documentation completeness
      against a checklist (patient info, NPI format, ICD-10/CPT presence,
      clinical notes quality). Produces a checklist with pass/fail per item
      and specific additional-info requests.
-   - **Clinical Reviewer Agent** (ICD-10 + PubMed + Clinical Trials MCP) — validates
+   - **Clinical Reviewer Agent** (ICD-10 + PubMed + Clinical Trials MCP, `max_turns=15`) — validates
      diagnosis codes via `validate_code` and `lookup_code`, explores code hierarchies
      via `get_hierarchy`, extracts clinical indicators with **confidence scoring**
      (0-100 per field), searches supporting literature via PubMed `search`,
      searches relevant clinical trials via `search_trials` and `search_by_eligibility`,
      and structures a clinical narrative.
+   - Agent results are validated for expected keys; incomplete results trigger
+     an automatic retry (see [Structured output — Resilience workarounds](#structured-output)).
 
    **Phase 2 — Sequential** (depends on clinical findings):
-   - **Coverage Agent** (NPI + CMS MCP) — receives the Clinical Reviewer's
+   - **Coverage Agent** (NPI + CMS MCP, `max_turns=15`) — receives the Clinical Reviewer's
      output, verifies provider via `npi_validate`/`npi_lookup`, searches
      coverage policies via `search_national_coverage`/`search_local_coverage`/
      `get_coverage_document`/`batch_get_ncds`, identifies applicable MACs via
@@ -312,6 +314,7 @@ evaluated"), so reviewers see exactly what was and was not performed.
 |----------|-------|
 | **Role** | Documentation completeness validation |
 | **Tools** | None (pure reasoning) |
+| **`max_turns`** | 5 |
 | **Input** | Raw PA request data |
 | **Output** | Checklist (8 items), missing items, additional-info requests |
 
@@ -338,6 +341,7 @@ of "fail" and do not affect the overall compliance status.
 | **Role** | Clinical data extraction, code validation, confidence scoring, clinical trials search |
 | **MCP Servers** | `icd10-codes`, `pubmed`, `clinical-trials` |
 | **Tools** | `validate_code`, `lookup_code`, `search_codes`, `get_hierarchy`, `get_by_category`, `get_by_body_system`, `search` (PubMed), `search_trials`, `get_trial_details`, `search_by_eligibility`, `search_investigators`, `analyze_endpoints`, `search_by_sponsor` |
+| **`max_turns`** | 15 |
 | **Input** | Raw PA request data |
 | **Output** | Diagnosis validation, clinical extraction (with `extraction_confidence` 0-100), literature support, clinical trials, clinical summary |
 
@@ -364,6 +368,7 @@ is the average. Below 60% triggers a low-confidence warning.
 | **Role** | Provider verification, coverage policy assessment, criteria mapping, diagnosis-policy alignment |
 | **MCP Servers** | `npi-registry`, `cms-coverage` |
 | **Tools** | `npi_validate`, `npi_lookup`, `npi_search`, `search_national_coverage`, `search_local_coverage`, `get_coverage_document`, `get_contractors`, `get_whats_new_report`, `batch_get_ncds`, `sad_exclusion_list` |
+| **`max_turns`** | 15 |
 | **Input** | Raw PA request + Clinical Reviewer findings |
 | **Output** | Provider verification, coverage policies, criteria assessment (MET/NOT_MET/INSUFFICIENT + confidence), documentation gaps (critical/non-critical), coverage limitations |
 
@@ -396,8 +401,10 @@ evaluated by agent").
 |----------|-------|
 | **Role** | Pre-flight CPT validation, coordinate agents, apply gate-based decision rubric, produce final recommendation |
 | **Tools** | CPT format validation (local, pre-agent), no MCP tools (reasoning only for synthesis) |
+| **`max_turns`** | 5 (synthesis agent) |
 | **Input** | All three agent reports + CPT validation results |
 | **Output** | APPROVE/PEND recommendation, confidence (0-1.0 + HIGH/MEDIUM/LOW), rationale, audit trail, audit justification document |
+| **Resilience** | Validates agent results for expected keys, retries incomplete agents once (`_MAX_AGENT_RETRIES = 1`) |
 
 ### Decision Rubric — LENIENT Mode (Default)
 
@@ -1538,6 +1545,14 @@ limitation in `agent_framework_claude` (the `structured_output` field from the
 CLI's `ResultMessage` is not propagated to `AgentResponse`), the structured
 output cannot be accessed programmatically.
 
+> **Why this matters:** When structured output works correctly at the API level,
+> the model is constrained to produce JSON matching the full schema before the
+> response is considered complete. The API will not return a partial response —
+> it keeps generating tokens until every required field is populated and the JSON
+> is valid. This makes mid-response truncation impossible. Without it, the model
+> produces free-text with embedded JSON, which can be cut off at any point by
+> the CLI or API layer — resulting in missing fields and silent data loss.
+
 As a workaround, all agent instructions include a mandate to respond with
 JSON inside a `` ```json `` code fence:
 
@@ -1545,6 +1560,28 @@ JSON inside a `` ```json `` code fence:
 CRITICAL: Your FINAL response MUST be a single valid JSON object
 inside a ```json code fence. No markdown commentary outside the fence.
 ```
+
+**Resilience workarounds (for truncated/incomplete responses):**
+
+Because `structured_output` is not available, agent responses can occasionally
+be truncated by the CLI or Azure API, producing incomplete JSON. The following
+mechanisms mitigate this:
+
+| Mechanism | Where | What it does |
+|-----------|-------|-------------|
+| `max_turns` | Agent config (`ClaudeAgentOptions`) | Ensures agents have enough turns to complete all tool calls and produce a full response. Clinical and Coverage agents use 15 turns; Compliance and Synthesis use 5. Without an explicit limit, the CLI may default to fewer turns and cut off the agent mid-response. |
+| Result validation | `_validate_agent_result()` in orchestrator | Checks that each agent result contains its expected top-level keys (e.g., `diagnosis_validation`, `clinical_extraction`, `clinical_summary` for Clinical). |
+| Automatic retry | `_safe_run()` in orchestrator | If validation detects missing keys, the agent is retried once (`_MAX_AGENT_RETRIES = 1`). Logs a warning with the missing keys before retrying. |
+| SSE status warnings | Phase completion events | Reports `"status": "warning"` with details about missing keys in the SSE progress stream, so the frontend can surface incomplete results. |
+
+Agent `max_turns` configuration:
+
+| Agent | `max_turns` | Rationale |
+|-------|------------|-----------|
+| Clinical Reviewer | 15 | Most tools: ICD-10 validation, PubMed search, Clinical Trials search |
+| Coverage | 15 | Multiple tools: NPI validation/lookup, CMS national/local coverage search |
+| Compliance | 5 | No external tools — pure text reasoning |
+| Synthesis | 5 | No external tools — reasoning over agent outputs |
 
 `parse_json_response()` uses a multi-strategy approach:
 
@@ -2113,6 +2150,58 @@ even after the process exits.
 **Fix:** Wait 2-4 minutes for the socket to clear, or use a different port
 (see above). Restarting the terminal or rebooting also clears zombie
 sockets.
+
+### Agent returns truncated/incomplete response (missing clinical data)
+
+One or more agents return partial data — for example, Clinical Reviewer
+shows empty sections for Diagnosis Validation, Clinical Extraction,
+Literature Support, or Clinical Trials.
+
+**Cause:** The `agent_framework_claude` package does not propagate
+`structured_output` from the Claude Code CLI's `ResultMessage` to the
+`AgentResponse` object. Without structured output enforcement, the API
+can return a truncated response (e.g., 414 bytes instead of 3000+). The
+JSON parser extracts whatever fragment it can, resulting in most fields
+being silently empty.
+
+When structured output works, the API is constrained to produce the full
+JSON schema before completing — truncation is impossible. Until the
+framework is fixed, responses rely on text-based JSON extraction.
+
+**Symptoms in server logs:**
+
+```
+[parse] text length=414
+[parse] Strategy 1: no fences found or none parsed
+[parse] Strategy 2 (brace-match backward) succeeded
+[DIAG] Saved Clinical raw result (4 keys)
+```
+
+A normal Clinical result has 6+ top-level keys and 2000-4000 characters.
+If you see fewer than 6 keys or text length under 500, the response was
+truncated.
+
+**Mitigations (in place):**
+
+1. **`max_turns`** — all agents have explicit `max_turns` set (15 for
+   Clinical/Coverage, 5 for Compliance/Synthesis) to prevent the CLI from
+   cutting off the agent before it produces its final response.
+2. **Result validation** — `_validate_agent_result()` checks for expected
+   top-level keys after each agent run.
+3. **Automatic retry** — `_safe_run()` retries the agent once if validation
+   fails. Look for this log line:
+   ```
+   WARNING: Clinical Reviewer Agent returned incomplete result (attempt 1/2).
+   Missing keys: clinical_extraction, clinical_summary. Retrying...
+   ```
+4. **SSE warnings** — phase completion events surface validation warnings
+   to the frontend.
+
+**Ultimate fix:** The `agent_framework_claude` package needs to propagate
+`structured_output` from the CLI transport layer to `AgentResponse`. When
+this is resolved, `parse_json_response()` Strategy 0 will activate and all
+text-based parsing becomes a fallback only. Track the framework issue with
+Microsoft.
 
 ---
 

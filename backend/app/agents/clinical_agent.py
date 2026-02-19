@@ -188,6 +188,7 @@ async def create_clinical_agent() -> ClaudeAgent:
             default_options={
                 "cwd": _BACKEND_DIR,
                 "setting_sources": ["user", "project"],
+                "max_turns": 15,
                 "allowed_tools": [
                     "Skill",
                     "mcp__icd10-codes__validate_code",
@@ -212,6 +213,7 @@ async def create_clinical_agent() -> ClaudeAgent:
     return ClaudeAgent(
         instructions=CLINICAL_INSTRUCTIONS,
         default_options={
+            "max_turns": 15,
             "mcp_servers": CLINICAL_MCP_SERVERS,
             "permission_mode": "bypassPermissions",
             "output_format": _output_format,

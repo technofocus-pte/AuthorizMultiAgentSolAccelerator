@@ -40,6 +40,37 @@ logger = logging.getLogger(__name__)
 
 _BACKEND_DIR = str(Path(__file__).resolve().parent.parent.parent)
 
+# Maximum number of retries when an agent returns an incomplete result
+_MAX_AGENT_RETRIES = 1
+
+# Expected top-level keys for each agent result.
+# If any of these are missing the result is considered incomplete/truncated.
+_EXPECTED_KEYS: dict[str, set[str]] = {
+    "Compliance Agent": {"checklist", "overall_status"},
+    "Clinical Reviewer Agent": {
+        "diagnosis_validation",
+        "clinical_extraction",
+        "clinical_summary",
+    },
+    "Coverage Agent": {"provider_verification", "criteria_assessment"},
+}
+
+
+def _validate_agent_result(agent_name: str, result: dict) -> list[str]:
+    """Check that an agent result contains the expected top-level keys.
+
+    Returns a list of missing key names (empty list means valid).
+    """
+    if result.get("error"):
+        return [f"error: {result['error']}"]
+
+    expected = _EXPECTED_KEYS.get(agent_name, set())
+    if not expected:
+        return []
+
+    missing = [k for k in expected if k not in result]
+    return missing
+
 
 # --- In-memory review store (demo persistence) ---
 _review_store: dict[str, dict] = {}
@@ -717,18 +748,30 @@ async def run_multi_agent_review(
     _dump_agent_result("Compliance", compliance_result)
     _dump_agent_result("Clinical", clinical_result)
 
+    # Build per-agent status with validation warnings
+    def _agent_status(name: str, result: dict, ok_msg: str) -> dict:
+        if result.get("error"):
+            return {"status": "error", "detail": result["error"]}
+        missing = _validate_agent_result(name, result)
+        if missing:
+            return {
+                "status": "warning",
+                "detail": f"Partial result — missing: {', '.join(missing)}",
+            }
+        return {"status": "done", "detail": ok_msg}
+
     await _emit({
         "phase": "phase_1", "status": "completed", "progress_pct": 40,
         "message": "Compliance and Clinical agents completed",
         "agents": {
-            "compliance": {
-                "status": "error" if compliance_result.get("error") else "done",
-                "detail": compliance_result.get("error", "Documentation review complete"),
-            },
-            "clinical": {
-                "status": "error" if clinical_result.get("error") else "done",
-                "detail": clinical_result.get("error", "Clinical analysis complete"),
-            },
+            "compliance": _agent_status(
+                "Compliance Agent", compliance_result,
+                "Documentation review complete",
+            ),
+            "clinical": _agent_status(
+                "Clinical Reviewer Agent", clinical_result,
+                "Clinical analysis complete",
+            ),
         },
     })
 
@@ -757,10 +800,10 @@ async def run_multi_agent_review(
         "phase": "phase_2", "status": "completed", "progress_pct": 70,
         "message": "Coverage Agent completed",
         "agents": {
-            "coverage": {
-                "status": "error" if coverage_result.get("error") else "done",
-                "detail": coverage_result.get("error", "Coverage analysis complete"),
-            },
+            "coverage": _agent_status(
+                "Coverage Agent", coverage_result,
+                "Coverage analysis complete",
+            ),
         },
     })
 
@@ -916,32 +959,71 @@ def _dump_agent_result(agent_name: str, result: dict) -> None:
 
 
 async def _safe_run(agent_name: str, fn, *args) -> dict:
-    """Run an agent function with error handling.
+    """Run an agent function with error handling and automatic retry.
 
     On Windows, if the running event loop is a SelectorEventLoop (which
     uvicorn --reload may create), subprocess execution will fail. In that
     case, run the agent in a separate thread with its own ProactorEventLoop.
 
+    After each attempt, the result is validated against ``_EXPECTED_KEYS``.
+    If required keys are missing (e.g. from a truncated API response), the
+    agent is retried up to ``_MAX_AGENT_RETRIES`` times.
+
     Returns the agent's result dict on success, or an error dict on failure.
     """
-    try:
-        loop = asyncio.get_running_loop()
-        loop_type = type(loop).__name__
-        policy_type = type(asyncio.get_event_loop_policy()).__name__
-        logger.info("[debug] %s — event loop: %s, policy: %s", agent_name, loop_type, policy_type)
+    last_result: dict = {"error": "Agent did not run", "tool_results": []}
 
-        # If running on a SelectorEventLoop, subprocess_exec won't work.
-        # Run the agent in a separate thread with a ProactorEventLoop.
-        if isinstance(loop, asyncio.SelectorEventLoop) and os.name == "nt":
-            logger.info("[debug] %s — SelectorEventLoop detected, using thread-based ProactorEventLoop", agent_name)
-            return await _run_in_proactor_thread(agent_name, fn, *args)
+    for attempt in range(_MAX_AGENT_RETRIES + 1):
+        try:
+            loop = asyncio.get_running_loop()
+            loop_type = type(loop).__name__
+            policy_type = type(asyncio.get_event_loop_policy()).__name__
+            logger.info(
+                "[debug] %s (attempt %d/%d) — event loop: %s, policy: %s",
+                agent_name, attempt + 1, _MAX_AGENT_RETRIES + 1,
+                loop_type, policy_type,
+            )
 
-        return await fn(*args)
-    except Exception as e:
-        import traceback
-        tb = traceback.format_exc()
-        logger.error("%s failed:\n%s", agent_name, tb)
-        return {"error": str(e), "tool_results": []}
+            # If running on a SelectorEventLoop, subprocess_exec won't work.
+            # Run the agent in a separate thread with a ProactorEventLoop.
+            if isinstance(loop, asyncio.SelectorEventLoop) and os.name == "nt":
+                logger.info("[debug] %s — SelectorEventLoop detected, using thread-based ProactorEventLoop", agent_name)
+                last_result = await _run_in_proactor_thread(agent_name, fn, *args)
+            else:
+                last_result = await fn(*args)
+
+        except Exception as e:
+            import traceback
+            tb = traceback.format_exc()
+            logger.error("%s attempt %d failed:\n%s", agent_name, attempt + 1, tb)
+            last_result = {"error": str(e), "tool_results": []}
+
+        # Validate result completeness
+        missing = _validate_agent_result(agent_name, last_result)
+        if not missing:
+            if attempt > 0:
+                logger.info(
+                    "%s succeeded on retry (attempt %d/%d)",
+                    agent_name, attempt + 1, _MAX_AGENT_RETRIES + 1,
+                )
+            return last_result
+
+        # Result is incomplete — decide whether to retry
+        if attempt < _MAX_AGENT_RETRIES:
+            logger.warning(
+                "%s returned incomplete result (attempt %d/%d). "
+                "Missing keys: %s. Retrying...",
+                agent_name, attempt + 1, _MAX_AGENT_RETRIES + 1,
+                ", ".join(missing),
+            )
+        else:
+            logger.error(
+                "%s returned incomplete result after %d attempt(s). "
+                "Missing keys: %s. Using partial result.",
+                agent_name, attempt + 1, ", ".join(missing),
+            )
+
+    return last_result
 
 
 async def _run_in_proactor_thread(agent_name: str, fn, *args) -> dict:
@@ -1001,6 +1083,7 @@ async def _run_synthesis(
             default_options={
                 "cwd": _BACKEND_DIR,
                 "setting_sources": ["user", "project"],
+                "max_turns": 5,
                 "allowed_tools": ["Skill"],
                 "permission_mode": "bypassPermissions",
                 "output_format": _output_format,
@@ -1010,6 +1093,7 @@ async def _run_synthesis(
         agent = ClaudeAgent(
             instructions=SYNTHESIS_INSTRUCTIONS,
             default_options={
+                "max_turns": 5,
                 "permission_mode": "bypassPermissions",
                 "output_format": _output_format,
             },

@@ -119,6 +119,7 @@ async def create_compliance_agent() -> ClaudeAgent:
             default_options={
                 "cwd": _BACKEND_DIR,
                 "setting_sources": ["user", "project"],
+                "max_turns": 5,
                 "allowed_tools": ["Skill"],
                 "permission_mode": "bypassPermissions",
                 "output_format": _output_format,
@@ -127,6 +128,7 @@ async def create_compliance_agent() -> ClaudeAgent:
     return ClaudeAgent(
         instructions=COMPLIANCE_INSTRUCTIONS,
         default_options={
+            "max_turns": 5,
             "permission_mode": "bypassPermissions",
             "output_format": _output_format,
         },

@@ -206,6 +206,7 @@ async def create_coverage_agent() -> ClaudeAgent:
             default_options={
                 "cwd": _BACKEND_DIR,
                 "setting_sources": ["user", "project"],
+                "max_turns": 15,
                 "allowed_tools": [
                     "Skill",
                     "mcp__npi-registry__npi_validate",
@@ -227,6 +228,7 @@ async def create_coverage_agent() -> ClaudeAgent:
     return ClaudeAgent(
         instructions=COVERAGE_INSTRUCTIONS,
         default_options={
+            "max_turns": 15,
             "mcp_servers": COVERAGE_MCP_SERVERS,
             "permission_mode": "bypassPermissions",
             "output_format": _output_format,
