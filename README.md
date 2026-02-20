@@ -95,6 +95,7 @@ confidence scoring, progressive gate evaluation, and structured audit trails.
 │  │  POST /api/decision — Accept or Override recommendation │  │
 │  │  Generates auth number (PA-YYYYMMDD-XXXXX)              │  │
 │  │  Produces approval/pend notification letters (text + PDF)  │  │
+│  │  Override rationale flows to letters + audit PDF         │  │
 │  │  In-memory review store for persistence                 │  │
 │  └────────────────────────────────────────────────────────┘  │
 │                                                              │
@@ -223,6 +224,21 @@ confidence scoring, progressive gate evaluation, and structured audit trails.
    evaluation, and documentation notes. Both a plain-text preview and
    a professionally formatted **PDF** (generated via `fpdf2`) are included.
    The PDF can be downloaded directly from the Decision Panel.
+
+   **Override traceability:** When a clinician overrides the AI
+   recommendation, the override rationale, original AI recommendation,
+   and reviewer name are included in:
+   - The **notification letter** (plain-text and PDF) — a "Clinician
+     Override Notice" section shows the original AI recommendation and
+     the override rationale
+   - The **audit justification PDF** — regenerated with a new Section 9
+     ("Clinician Override Record") documenting the override details,
+     reviewer identity, rationale, and a comparison of AI vs. clinician
+     decisions
+   - The **API response** — `override_rationale` and
+     `original_recommendation` fields are returned to the frontend
+   - The **frontend UI** — a highlighted "Clinician Override" box
+     displays the original AI recommendation and rationale
 
 ---
 
@@ -848,7 +864,9 @@ Generates an authorization number and notification letter.
   "final_recommendation": "approve",
   "decided_by": "Dr. Jane Doe",
   "decided_at": "2026-02-13T11:05:00Z",
-  "was_overridden": false,
+  "was_overridden": true,
+  "override_rationale": "Clinical evidence supports approval despite agent uncertainty...",
+  "original_recommendation": "pend_for_review",
   "letter": {
     "authorization_number": "PA-20260213-00001",
     "letter_type": "approval",
@@ -862,6 +880,13 @@ Generates an authorization number and notification letter.
     "pdf_base64": "JVBERi0xLjQg..."
   }
 }
+```
+
+When `was_overridden` is `true`, `override_rationale` and
+`original_recommendation` are included. The notification letter (both
+`body_text` and the PDF in `pdf_base64`) contains a "Clinician Override
+Notice" section, and the stored audit justification PDF is regenerated
+with override details.
 ```
 
 **Error responses:**

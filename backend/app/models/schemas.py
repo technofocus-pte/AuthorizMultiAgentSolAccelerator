@@ -224,6 +224,8 @@ class DecisionResponse(BaseModel):
     decided_by: str
     decided_at: str
     was_overridden: bool
+    override_rationale: str | None = None
+    original_recommendation: str | None = None
     letter: NotificationLetter
 
 

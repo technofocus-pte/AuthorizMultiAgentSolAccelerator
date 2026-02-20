@@ -176,6 +176,20 @@ export function DecisionPanel({ review }: Props) {
               </Badge>
             )}
           </div>
+          {decision.was_overridden && decision.override_rationale && (
+            <div className="rounded-md border border-warning/30 bg-warning/5 p-3 space-y-1">
+              <p className="text-sm font-semibold text-warning">Clinician Override</p>
+              {decision.original_recommendation && (
+                <p className="text-xs text-muted-foreground">
+                  Original AI Recommendation:{" "}
+                  <span className="font-medium">
+                    {decision.original_recommendation.replace(/_/g, " ").toUpperCase()}
+                  </span>
+                </p>
+              )}
+              <p className="text-sm">{decision.override_rationale}</p>
+            </div>
+          )}
           <div>
             <p className="text-sm font-medium mb-2 flex items-center gap-1.5">
               <FileText className="h-3.5 w-3.5 text-muted-foreground" />

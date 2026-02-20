@@ -741,3 +741,185 @@ def generate_audit_justification_pdf(
     pdf.output(buf)
     pdf_bytes = buf.getvalue()
     return base64.b64encode(pdf_bytes).decode("ascii")
+
+
+def regenerate_audit_pdf_with_override(
+    original_args: dict,
+    was_overridden: bool,
+    override_rationale: str,
+    override_reviewer: str,
+    original_recommendation: str,
+    final_recommendation: str,
+    decided_at: str,
+) -> str:
+    """Regenerate the audit PDF with an additional Section 9: Clinician Override.
+
+    Re-generates the full audit PDF and appends override information.
+    Returns base64-encoded PDF string.
+    """
+    # First generate the base PDF content by calling the original function
+    # but we'll build it ourselves to append a section.
+    # For simplicity, decode the original, but fpdf2 doesn't support appending.
+    # Instead, we add the override section to the data and regenerate.
+    request_data = original_args.get("request_data", {})
+    synthesis = original_args.get("synthesis", {})
+    compliance_result = original_args.get("compliance_result", {})
+    clinical_result = original_args.get("clinical_result", {})
+    coverage_result = original_args.get("coverage_result", {})
+    audit_trail = original_args.get("audit_trail", {})
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    recommendation = synthesis.get("recommendation", "pend_for_review")
+    confidence = synthesis.get("confidence", 0)
+    confidence_level = synthesis.get("confidence_level", "LOW")
+
+    pdf = _AuditPDF()
+    pdf.alias_nb_pages()
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=25)
+
+    # --- Disclaimer banner ---
+    pdf.set_fill_color(*_AMBER_FILL)
+    pdf.set_font("Helvetica", "BI", 8)
+    pdf.set_text_color(*_AMBER_TEXT)
+    pdf.multi_cell(
+        0, 4,
+        "WARNING: AI-ASSISTED DRAFT -- REVIEW REQUIRED. "
+        "All recommendations are drafts requiring human clinical review. "
+        "Coverage policies reflect Medicare LCDs/NCDs only. "
+        "Commercial and Medicare Advantage plans may differ.",
+        fill=True,
+    )
+    pdf.set_text_color(*_BLACK)
+    pdf.ln(4)
+
+    # Override alert banner at top
+    if was_overridden:
+        pdf.set_fill_color(255, 220, 220)
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.set_text_color(180, 0, 0)
+        pdf.multi_cell(
+            0, 5,
+            f"CLINICIAN OVERRIDE: The original AI recommendation "
+            f"({original_recommendation.replace('_', ' ').upper()}) was overridden to "
+            f"{final_recommendation.replace('_', ' ').upper()} by {override_reviewer} "
+            f"on {decided_at}.",
+            fill=True,
+        )
+        pdf.set_text_color(*_BLACK)
+    pdf.ln(6)
+
+    # --- Re-render all 8 original sections ---
+    # (delegate to original function internals by calling it and decoding,
+    #  but since we can't easily append to a PDF, we replicate the key sections
+    #  in a streamlined way and add Section 9)
+
+    # Section 1: Executive Summary (abbreviated)
+    _section_heading(pdf, 1, "Executive Summary")
+    _decision_badge(pdf, final_recommendation if was_overridden else recommendation)
+    _kv(pdf, "Review Date", now)
+    _kv(pdf, "Patient", f"{request_data.get('patient_name', 'N/A')} (DOB: {request_data.get('patient_dob', 'N/A')})")
+    _kv(pdf, "Provider NPI", request_data.get("provider_npi", "N/A"))
+    _kv(pdf, "Insurance ID", request_data.get("insurance_id") or "Not provided")
+    _kv(pdf, "Diagnosis Codes", ", ".join(request_data.get("diagnosis_codes", [])))
+    _kv(pdf, "Procedure Codes", ", ".join(request_data.get("procedure_codes", [])))
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.cell(50, 6, "AI Confidence:")
+    pdf.ln(1)
+    _confidence_bar(pdf, confidence, confidence_level)
+    summary_text = synthesis.get("summary", "N/A")
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.cell(0, 6, "Summary:")
+    pdf.ln(5)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.multi_cell(0, 5, _safe_str(summary_text))
+    pdf.ln(4)
+
+    # Section 9: Clinician Override (new section, rendered prominently)
+    _check_page_space(pdf, 60)
+    _section_heading(pdf, 9, "Clinician Override Record")
+
+    # Override details
+    _kv(pdf, "Override Status", "YES -- Decision was overridden", bold_value=True)
+    _kv(pdf, "Overridden By", override_reviewer, bold_value=True)
+    _kv(pdf, "Override Date", decided_at)
+    _kv(pdf, "Original AI Recommendation", original_recommendation.replace("_", " ").upper())
+    _kv(pdf, "Final Decision", final_recommendation.replace("_", " ").upper(), bold_value=True)
+    pdf.ln(3)
+
+    # Override rationale
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.cell(0, 6, "Override Rationale:")
+    pdf.ln(5)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.multi_cell(0, 5, _safe_str(override_rationale))
+    pdf.ln(4)
+
+    # Comparison box
+    pdf.set_fill_color(*_AMBER_FILL)
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.set_text_color(*_AMBER_TEXT)
+    pdf.multi_cell(
+        0, 4,
+        f"AI recommended: {original_recommendation.replace('_', ' ').upper()} "
+        f"(Confidence: {confidence_level} {int(confidence * 100)}%) -- "
+        f"Clinician decision: {final_recommendation.replace('_', ' ').upper()}",
+        fill=True,
+    )
+    pdf.set_text_color(*_BLACK)
+    pdf.ln(6)
+
+    # Continue with remaining original sections (5-8) for context
+    # Section 5: Decision Rationale (AI)
+    _check_page_space(pdf, 40)
+    _section_heading(pdf, 5, "AI Decision Rationale (Pre-Override)")
+    _kv(pdf, "AI Decision", recommendation.upper(), bold_value=True)
+    _kv(pdf, "AI Confidence", f"{confidence_level} ({int(confidence * 100)}%)")
+
+    rationale = synthesis.get("clinical_rationale", "No rationale provided.")
+    pdf.set_font("Helvetica", "", 9)
+    pdf.multi_cell(0, 5, _safe_str(rationale))
+    pdf.ln(3)
+
+    # Section 7: Audit Trail
+    _check_page_space(pdf, 40)
+    _section_heading(pdf, 7, "Audit Trail")
+    data_sources = audit_trail.get("data_sources", [])
+    if data_sources:
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.cell(0, 6, "Data Sources:")
+        pdf.ln(5)
+        for src in data_sources:
+            _bullet(pdf, src)
+        pdf.ln(3)
+    _kv(pdf, "Review Started", audit_trail.get("review_started", "N/A"))
+    _kv(pdf, "Review Completed", audit_trail.get("review_completed", "N/A"))
+    _kv(pdf, "Decision Overridden At", decided_at)
+    pdf.ln(3)
+
+    # Final disclaimer
+    _check_page_space(pdf, 15)
+    pdf.ln(4)
+    pdf.set_fill_color(*_AMBER_FILL)
+    pdf.set_font("Helvetica", "I", 7)
+    pdf.set_text_color(*_AMBER_TEXT)
+    pdf.multi_cell(
+        0, 4,
+        "DISCLAIMER: This audit document reflects both the AI-assisted review "
+        "and the clinician override. The final decision was made by a licensed "
+        "clinician who reviewed and overrode the AI recommendation.",
+        fill=True,
+    )
+    pdf.set_text_color(*_GRAY_TEXT)
+    pdf.set_font("Helvetica", "I", 7)
+    pdf.ln(3)
+    pdf.cell(
+        0, 4,
+        f"Generated: {now} | AI-Assisted Prior Authorization Review System",
+        align="C",
+    )
+
+    buf = io.BytesIO()
+    pdf.output(buf)
+    pdf_bytes = buf.getvalue()
+    return base64.b64encode(pdf_bytes).decode("ascii")

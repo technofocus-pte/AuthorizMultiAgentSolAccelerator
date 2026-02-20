@@ -47,6 +47,10 @@ def generate_approval_letter(
     clinical_rationale: str = "",
     coverage_criteria_met: list[str] | None = None,
     documentation_gaps: list[dict] | None = None,
+    was_overridden: bool = False,
+    override_rationale: str = "",
+    override_reviewer: str = "",
+    original_recommendation: str = "",
 ) -> dict:
     """Generate an APPROVAL notification letter.
 
@@ -86,6 +90,18 @@ def generate_approval_letter(
         if items:
             gaps_section = "\n\nDOCUMENTATION NOTES:\n" + "\n".join(items)
 
+    override_section = ""
+    if was_overridden:
+        override_section = f"""\n\n======================================================
+CLINICIAN OVERRIDE NOTICE
+======================================================
+This decision was OVERRIDDEN by {override_reviewer}.
+Original AI Recommendation: {original_recommendation.replace('_', ' ').upper()}
+Override Decision: APPROVED
+
+Override Rationale:
+{override_rationale}"""
+
     body = f"""{_DISCLAIMER_HEADER}
 
 ======================================================
@@ -115,7 +131,7 @@ AUTHORIZATION PERIOD:
   Expiration Date: {expiration.isoformat()}{policy_section}
 
 CLINICAL SUMMARY:
-{summary}{rationale_section}{criteria_section}{gaps_section}
+{summary}{rationale_section}{criteria_section}{gaps_section}{override_section}
 
 TERMS AND CONDITIONS:
 This authorization is valid for the services described above during the
@@ -161,6 +177,10 @@ def generate_pend_letter(
     clinical_rationale: str = "",
     coverage_criteria_met: list[str] | None = None,
     coverage_criteria_not_met: list[str] | None = None,
+    was_overridden: bool = False,
+    override_rationale: str = "",
+    override_reviewer: str = "",
+    original_recommendation: str = "",
 ) -> dict:
     """Generate a PEND (request for additional information) notification letter.
 
@@ -215,6 +235,18 @@ def generate_pend_letter(
         f"correspondence. Documentation deadline: {deadline.isoformat()}."
     )
 
+    override_section = ""
+    if was_overridden:
+        override_section = f"""\n\n======================================================
+CLINICIAN OVERRIDE NOTICE
+======================================================
+This decision was OVERRIDDEN by {override_reviewer}.
+Original AI Recommendation: {original_recommendation.replace('_', ' ').upper()}
+Override Decision: PEND FOR REVIEW
+
+Override Rationale:
+{override_rationale}"""
+
     body = f"""{_DISCLAIMER_HEADER}
 
 ======================================================
@@ -240,7 +272,7 @@ REQUESTED SERVICES:
   Diagnosis Code(s): {', '.join(diagnosis_codes)}{policy_section}
 
 CLINICAL SUMMARY:
-{summary}{rationale_section}{criteria_met_section}{criteria_not_met_section}
+{summary}{rationale_section}{criteria_met_section}{criteria_not_met_section}{override_section}
 
 ADDITIONAL DOCUMENTATION REQUIRED:
 {missing_section}
@@ -508,6 +540,39 @@ def generate_letter_pdf(letter_dict: dict) -> str:
         pdf.multi_cell(0, 4.5, _safe(rationale),
                        new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.ln(4)
+
+    # ── Clinician Override Notice ──────────────────────────────────────
+    if letter_dict.get("was_overridden"):
+        _section_heading(pdf, "Clinician Override Notice")
+        _callout_box(
+            pdf,
+            "This decision was overridden by a clinician. "
+            "The original AI recommendation was modified based on clinical judgment.",
+            bg=_WARN_BG,
+            text_color=_WARN_TEXT,
+            bold=True,
+            font_size=8,
+        )
+        pdf.ln(3)
+        override_reviewer = letter_dict.get("override_reviewer", "")
+        original_rec = letter_dict.get("original_recommendation", "")
+        override_rationale = letter_dict.get("override_rationale", "")
+        if override_reviewer:
+            _info_row(pdf, [
+                ("Override By", override_reviewer),
+                ("Original AI Recommendation", original_rec.replace("_", " ").upper() if original_rec else "N/A"),
+            ])
+            pdf.ln(3)
+        if override_rationale:
+            pdf.set_font("Helvetica", "B", 9)
+            pdf.set_text_color(*_PRIMARY)
+            pdf.cell(0, 6, "Override Rationale:",
+                     new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.set_font("Helvetica", "", 9)
+            pdf.set_text_color(*_TEXT)
+            pdf.multi_cell(0, 5, _safe(override_rationale),
+                           new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.ln(4)
 
     # ── Coverage criteria met ─────────────────────────────────────────
     criteria_met = letter_dict.get("coverage_criteria_met", [])

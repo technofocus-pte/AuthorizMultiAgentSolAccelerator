@@ -13,6 +13,7 @@ from app.services.notification import (
     generate_pend_letter,
     generate_letter_pdf,
 )
+from app.services.audit_pdf import regenerate_audit_pdf_with_override
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,17 @@ async def submit_decision(request: DecisionRequest):
         g if isinstance(g, dict) else {}
         for g in review_response.get("documentation_gaps", [])
     ]
+
+    # Override information for letters
+    is_overridden = request.action == "override"
+    original_recommendation = review_response["recommendation"]
+    override_kwargs = {
+        "was_overridden": is_overridden,
+        "override_rationale": request.override_rationale or "",
+        "override_reviewer": request.reviewer_name,
+        "original_recommendation": original_recommendation,
+    }
+
     common_kwargs = {
         "authorization_number": auth_number,
         "patient_name": request_data.get("patient_name", ""),
@@ -97,6 +109,7 @@ async def submit_decision(request: DecisionRequest):
         "clinical_rationale": review_response.get("clinical_rationale", ""),
         "coverage_criteria_met": review_response.get("coverage_criteria_met", []),
         "documentation_gaps": documentation_gaps,
+        **override_kwargs,
     }
 
     # Generate notification letter
@@ -131,6 +144,12 @@ async def submit_decision(request: DecisionRequest):
     if final_recommendation != "approve":
         letter_dict["missing_documentation"] = review_response.get("missing_documentation", [])
 
+    # Include override info in letter_dict for PDF rendering
+    letter_dict["was_overridden"] = is_overridden
+    letter_dict["override_rationale"] = request.override_rationale or ""
+    letter_dict["override_reviewer"] = request.reviewer_name if is_overridden else ""
+    letter_dict["original_recommendation"] = original_recommendation
+
     # Generate PDF (may fail on encoding issues — catch gracefully)
     try:
         letter_dict["pdf_base64"] = generate_letter_pdf(letter_dict)
@@ -139,6 +158,35 @@ async def submit_decision(request: DecisionRequest):
         letter_dict["pdf_base64"] = None  # Proceed without PDF
 
     decided_at = datetime.now(timezone.utc).isoformat()
+
+    # Regenerate audit PDF with override information if decision was overridden
+    updated_audit_pdf = None
+    if is_overridden:
+        try:
+            agent_results = review_response.get("agent_results", {})
+            audit_trail_data = review_response.get("audit_trail", {})
+            if isinstance(audit_trail_data, str):
+                audit_trail_data = {}
+            updated_audit_pdf = regenerate_audit_pdf_with_override(
+                original_args={
+                    "request_data": request_data,
+                    "synthesis": review_response,
+                    "compliance_result": (agent_results.get("compliance") or {}),
+                    "clinical_result": (agent_results.get("clinical") or {}),
+                    "coverage_result": (agent_results.get("coverage") or {}),
+                    "audit_trail": audit_trail_data,
+                },
+                was_overridden=True,
+                override_rationale=request.override_rationale or "",
+                override_reviewer=request.reviewer_name,
+                original_recommendation=original_recommendation,
+                final_recommendation=final_recommendation,
+                decided_at=decided_at,
+            )
+            # Update the stored review's audit PDF (get_review returns a ref)
+            stored["response"]["audit_justification_pdf"] = updated_audit_pdf
+        except Exception as e:
+            logger.error("Audit PDF regeneration failed: %s", e, exc_info=True)
 
     # Build and persist decision record
     decision_record = {
@@ -170,5 +218,7 @@ async def submit_decision(request: DecisionRequest):
         decided_by=request.reviewer_name,
         decided_at=decided_at,
         was_overridden=request.action == "override",
+        override_rationale=request.override_rationale if is_overridden else None,
+        original_recommendation=original_recommendation if is_overridden else None,
         letter=NotificationLetter(**letter_for_model),
     )

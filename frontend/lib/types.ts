@@ -232,5 +232,7 @@ export interface DecisionResponse {
   decided_by: string;
   decided_at: string;
   was_overridden: boolean;
+  override_rationale?: string;
+  original_recommendation?: string;
   letter: NotificationLetter;
 }
