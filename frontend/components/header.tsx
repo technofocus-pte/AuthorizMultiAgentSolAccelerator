@@ -5,7 +5,7 @@ export function Header() {
   return (
     <header className="mb-10">
       {/* Gradient banner */}
-      <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-[#0078D4] via-[#005A9E] to-[#003A6C] px-6 py-8 text-white shadow-lg">
+      <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-brand via-brand-dark to-brand-darker px-6 py-8 text-white shadow-lg">
         {/* Decorative circles */}
         <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10" />
         <div className="absolute -right-4 bottom-0 h-24 w-24 rounded-full bg-white/5" />

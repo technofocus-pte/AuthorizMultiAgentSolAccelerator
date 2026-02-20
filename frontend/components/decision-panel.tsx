@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { toast } from "sonner";
 import { Check, ArrowRightLeft, Download, Loader2, Gavel, Award, FileText, CheckCircle2, AlertTriangle } from "lucide-react";
 import { submitDecision } from "@/lib/api";
 import type { ReviewResponse, DecisionResponse } from "@/lib/types";
@@ -70,8 +71,12 @@ export function DecisionPanel({ review }: Props) {
       });
       setDecision(resp);
       setMode("submitted");
+      toast.success("Decision recorded", {
+        description: `Auth #${resp.authorization_number}`,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Decision failed");
+      toast.error("Decision failed");
     } finally {
       setLoading(false);
     }
@@ -98,8 +103,12 @@ export function DecisionPanel({ review }: Props) {
       });
       setDecision(resp);
       setMode("submitted");
+      toast.success("Override recorded", {
+        description: `Auth #${resp.authorization_number}`,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Decision failed");
+      toast.error("Override failed");
     } finally {
       setLoading(false);
     }
@@ -138,7 +147,7 @@ export function DecisionPanel({ review }: Props) {
       <Card className="mt-6 bg-muted/30 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
-            <Award className="h-5 w-5 text-green-600" />
+            <Award className="h-5 w-5 text-success" />
             Decision Recorded
           </CardTitle>
         </CardHeader>
@@ -162,7 +171,7 @@ export function DecisionPanel({ review }: Props) {
               {decision.final_recommendation.replace(/_/g, " ").toUpperCase()}
             </Badge>
             {decision.was_overridden && (
-              <Badge variant="outline" className="text-amber-600 border-amber-300">
+              <Badge variant="outline" className="text-warning border-warning/50">
                 Overridden
               </Badge>
             )}
@@ -189,7 +198,7 @@ export function DecisionPanel({ review }: Props) {
             )}
           </div>
           <div className="flex items-center gap-3">
-            <Button onClick={handleDownload} className="bg-gradient-to-r from-[#0078D4] to-[#005A9E] hover:from-[#006CBD] hover:to-[#004E8C] text-white shadow-sm">
+            <Button onClick={handleDownload} className="bg-gradient-to-r from-brand to-brand-dark hover:from-brand-hover hover:to-brand-hover-dark text-white shadow-sm">
               <Download className="mr-2 h-4 w-4" />
               Download Letter
             </Button>
@@ -207,7 +216,7 @@ export function DecisionPanel({ review }: Props) {
       <Card className="mt-6 bg-muted/30 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
-            <ArrowRightLeft className="h-5 w-5 text-amber-500" />
+            <ArrowRightLeft className="h-5 w-5 text-warning" />
             Override Recommendation
           </CardTitle>
         </CardHeader>
@@ -252,7 +261,7 @@ export function DecisionPanel({ review }: Props) {
             <Button
               onClick={handleOverrideSubmit}
               disabled={loading}
-              className="bg-amber-500 text-white hover:bg-amber-600"
+              className="bg-warning text-white hover:bg-warning-dark"
             >
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {loading ? "Submitting..." : "Submit Override"}
@@ -300,7 +309,7 @@ export function DecisionPanel({ review }: Props) {
           <Button
             onClick={handleAccept}
             disabled={loading}
-            className="bg-green-600 text-white hover:bg-green-700"
+            className="bg-success text-white hover:bg-success-dark"
           >
             {loading ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -316,7 +325,7 @@ export function DecisionPanel({ review }: Props) {
               setError(null);
             }}
             disabled={loading}
-            className="border border-amber-300 bg-amber-100 text-amber-900 hover:bg-amber-200"
+            className="border border-warning/50 bg-warning-light text-warning-dark hover:bg-warning/20"
           >
             <ArrowRightLeft className="mr-2 h-4 w-4" />
             Override

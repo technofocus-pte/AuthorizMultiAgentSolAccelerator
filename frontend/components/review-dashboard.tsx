@@ -57,7 +57,7 @@ export function ReviewDashboard({ review }: ReviewDashboardProps) {
   }
 
   return (
-    <div className="mt-8 space-y-6">
+    <div className="mt-8 space-y-6 animate-in fade-in-0 slide-in-from-bottom-4 duration-500">
       {/* Recommendation header */}
       <Card className="shadow-sm border-l-4 border-l-primary">
         <CardHeader>
@@ -136,7 +136,7 @@ export function ReviewDashboard({ review }: ReviewDashboardProps) {
           <CardContent className="space-y-3">
             {review.coverage_criteria_met.length > 0 && (
               <div>
-                <p className="text-sm font-medium text-green-700 mb-1 flex items-center gap-1.5">
+                <p className="text-sm font-medium text-success-dark mb-1 flex items-center gap-1.5">
                   <CheckCircle2 className="h-4 w-4" />
                   Criteria Met
                 </p>
@@ -149,7 +149,7 @@ export function ReviewDashboard({ review }: ReviewDashboardProps) {
             )}
             {review.coverage_criteria_not_met.length > 0 && (
               <div>
-                <p className="text-sm font-medium text-red-700 mb-1 flex items-center gap-1.5">
+                <p className="text-sm font-medium text-destructive mb-1 flex items-center gap-1.5">
                   <ShieldAlert className="h-4 w-4" />
                   Criteria Not Met
                 </p>
@@ -313,15 +313,15 @@ export function ReviewDashboard({ review }: ReviewDashboardProps) {
 
       {/* Download audit justification */}
       {(review.audit_justification_pdf || review.audit_justification) && (
-        <Card className="shadow-sm border border-blue-200 bg-gradient-to-r from-blue-50/60 to-indigo-50/40">
+        <Card className="shadow-sm border border-info/30 bg-gradient-to-r from-info-light/60 to-info-light/30">
           <CardContent className="py-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100">
-                  <FileText className="h-5 w-5 text-blue-700" />
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-info-light">
+                  <FileText className="h-5 w-5 text-info" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-gray-800">Audit Justification Document</p>
+                  <p className="text-sm font-semibold text-foreground">Audit Justification Document</p>
                   <p className="text-xs text-muted-foreground">
                     Full 8-section review with criterion evaluations, validation checks, and decision rationale
                   </p>
@@ -331,7 +331,7 @@ export function ReviewDashboard({ review }: ReviewDashboardProps) {
                 onClick={handleDownloadJustification}
                 variant="outline"
                 size="sm"
-                className="border-blue-300 text-blue-700 hover:bg-blue-100 hover:text-blue-800"
+                className="border-info/50 text-info hover:bg-info-light hover:text-info"
               >
                 <Download className="mr-1.5 h-4 w-4" />
                 Download PDF

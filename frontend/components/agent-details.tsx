@@ -68,11 +68,11 @@ function statusBadge(status: string) {
 function checkIcon(result: string) {
   switch (result) {
     case "pass":
-      return <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />;
+      return <CheckCircle2 className="h-4 w-4 text-success shrink-0" />;
     case "fail":
-      return <XCircle className="h-4 w-4 text-red-500 shrink-0" />;
+      return <XCircle className="h-4 w-4 text-destructive shrink-0" />;
     case "warning":
-      return <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />;
+      return <AlertCircle className="h-4 w-4 text-warning shrink-0" />;
     default:
       return <HelpCircle className="h-4 w-4 text-muted-foreground shrink-0" />;
   }
@@ -94,17 +94,17 @@ function ChecksSummary({ checks, title }: { checks: AgentCheck[]; title: string 
         </h4>
         <div className="flex items-center gap-3 text-xs">
           {passCount > 0 && (
-            <span className="flex items-center gap-1 text-green-600">
+            <span className="flex items-center gap-1 text-success">
               <CheckCircle2 className="h-3 w-3" /> {passCount} passed
             </span>
           )}
           {warnCount > 0 && (
-            <span className="flex items-center gap-1 text-amber-500">
+            <span className="flex items-center gap-1 text-warning">
               <AlertCircle className="h-3 w-3" /> {warnCount} warnings
             </span>
           )}
           {failCount > 0 && (
-            <span className="flex items-center gap-1 text-red-500">
+            <span className="flex items-center gap-1 text-destructive">
               <XCircle className="h-3 w-3" /> {failCount} failed
             </span>
           )}
@@ -244,7 +244,7 @@ function ComplianceTab({ data }: { data: ComplianceResult }) {
       {data.missing_items.length > 0 && (
         <div>
           <h4 className="text-sm font-medium mb-1 flex items-center gap-1.5">
-            <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+            <AlertTriangle className="h-3.5 w-3.5 text-warning" />
             Missing Items
           </h4>
           <ul className="list-disc list-inside text-sm text-muted-foreground space-y-0.5">
@@ -258,7 +258,7 @@ function ComplianceTab({ data }: { data: ComplianceResult }) {
       {data.additional_info_requests.length > 0 && (
         <div>
           <h4 className="text-sm font-medium mb-1 flex items-center gap-1.5">
-            <Info className="h-3.5 w-3.5 text-blue-500" />
+            <Info className="h-3.5 w-3.5 text-info" />
             Additional Info Requests
           </h4>
           <ul className="list-disc list-inside text-sm text-muted-foreground space-y-0.5">

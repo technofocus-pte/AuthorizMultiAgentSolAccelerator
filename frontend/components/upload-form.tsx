@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { toast } from "sonner";
 import { Loader2, Plus, X, FlaskConical, User, CalendarDays, Hash, CreditCard, Stethoscope, FileText, Send } from "lucide-react";
 import type { PriorAuthRequest, ReviewResponse, ReviewProgress, ProgressEvent, AgentId } from "@/lib/types";
 import { submitReviewStream } from "@/lib/api";
@@ -124,11 +125,17 @@ export function UploadForm({ onReviewComplete }: UploadFormProps) {
         setLoading(false);
         setProgress(null);
         onReviewComplete(result);
+        toast.success("Review complete", {
+          description: result.recommendation === "approve"
+            ? "Recommendation: Approve"
+            : "Recommendation: Pend for Review",
+        });
       },
       (errMsg) => {
         setLoading(false);
         setProgress((prev) => prev ? { ...prev, error: errMsg } : prev);
         setError(errMsg);
+        toast.error("Review failed", { description: errMsg });
       },
     );
   }
@@ -332,7 +339,7 @@ export function UploadForm({ onReviewComplete }: UploadFormProps) {
           )}
 
           {/* Submit */}
-          <Button type="submit" className="w-full bg-gradient-to-r from-[#0078D4] to-[#005A9E] hover:from-[#006CBD] hover:to-[#004E8C] text-white shadow-md" disabled={loading}>
+          <Button type="submit" className="w-full bg-gradient-to-r from-brand to-brand-dark hover:from-brand-hover hover:to-brand-hover-dark text-white shadow-md" disabled={loading}>
             {loading ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (

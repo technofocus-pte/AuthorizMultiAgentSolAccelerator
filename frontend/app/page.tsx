@@ -10,7 +10,7 @@ export default function Home() {
   const [review, setReview] = useState<ReviewResponse | null>(null);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50/50 via-background to-background">
+    <div className="min-h-screen bg-gradient-to-b from-info-light/50 via-background to-background">
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
         <Header />
         <UploadForm onReviewComplete={setReview} />

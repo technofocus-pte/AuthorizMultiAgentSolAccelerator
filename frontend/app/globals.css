@@ -38,6 +38,19 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-brand: var(--brand);
+  --color-brand-dark: var(--brand-dark);
+  --color-brand-darker: var(--brand-darker);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-hover-dark: var(--brand-hover-dark);
+  --color-success: var(--success);
+  --color-success-dark: var(--success-dark);
+  --color-success-light: var(--success-light);
+  --color-warning: var(--warning);
+  --color-warning-dark: var(--warning-dark);
+  --color-warning-light: var(--warning-light);
+  --color-info: var(--info);
+  --color-info-light: var(--info-light);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -80,6 +93,19 @@
   --sidebar-accent-foreground: oklch(0.175 0 0);
   --sidebar-border: oklch(0.91 0 0);
   --sidebar-ring: oklch(0.546 0.162 243.52);
+  --brand: oklch(0.55 0.16 243.52);
+  --brand-dark: oklch(0.45 0.15 243.52);
+  --brand-darker: oklch(0.35 0.12 243.52);
+  --brand-hover: oklch(0.50 0.16 243.52);
+  --brand-hover-dark: oklch(0.40 0.14 243.52);
+  --success: oklch(0.55 0.17 145);
+  --success-dark: oklch(0.50 0.15 145);
+  --success-light: oklch(0.92 0.05 145);
+  --warning: oklch(0.75 0.18 75);
+  --warning-dark: oklch(0.70 0.17 75);
+  --warning-light: oklch(0.92 0.08 75);
+  --info: oklch(0.55 0.16 243.52);
+  --info-light: oklch(0.93 0.04 243.52);
 }
 
 .dark {
@@ -114,6 +140,19 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.65 0.18 243.52);
+  --brand: oklch(0.60 0.16 243.52);
+  --brand-dark: oklch(0.50 0.15 243.52);
+  --brand-darker: oklch(0.40 0.12 243.52);
+  --brand-hover: oklch(0.55 0.16 243.52);
+  --brand-hover-dark: oklch(0.45 0.14 243.52);
+  --success: oklch(0.60 0.17 145);
+  --success-dark: oklch(0.55 0.15 145);
+  --success-light: oklch(0.25 0.05 145);
+  --warning: oklch(0.75 0.17 75);
+  --warning-dark: oklch(0.70 0.16 75);
+  --warning-light: oklch(0.25 0.05 75);
+  --info: oklch(0.60 0.16 243.52);
+  --info-light: oklch(0.25 0.04 243.52);
 }
 
 @layer base {
@@ -123,4 +162,13 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+@keyframes fill-bar {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(var(--bar-offset)); }
+}
+
+.animate-fill-bar {
+  animation: fill-bar 0.8s ease-out forwards;
 }

@@ -77,10 +77,10 @@ function PhaseIcon({
   status: "pending" | "running" | "completed";
 }) {
   if (status === "completed") {
-    return <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0" />;
+    return <CheckCircle2 className="h-5 w-5 text-success shrink-0" />;
   }
   if (status === "running") {
-    return <Loader2 className="h-5 w-5 text-blue-500 animate-spin shrink-0" />;
+    return <Loader2 className="h-5 w-5 text-brand animate-spin shrink-0" />;
   }
   return <Circle className="h-5 w-5 text-gray-300 shrink-0" />;
 }
@@ -91,7 +91,7 @@ function AgentStatusBadge({ status }: { status: AgentStatus }) {
   }
   if (status === "running") {
     return (
-      <Badge variant="default" className="bg-blue-600">
+      <Badge variant="default" className="bg-brand">
         Active
       </Badge>
     );
@@ -124,13 +124,13 @@ export function ProgressTracker({ progress }: ProgressTrackerProps) {
   const visibleAgents = getVisibleAgents(progress);
 
   return (
-    <Card className="border-blue-200 bg-gradient-to-b from-blue-50/50 to-white">
+    <Card className="border-brand/30 bg-gradient-to-b from-info-light/50 to-white">
       <CardContent className="pt-6 space-y-5">
         {/* Header: progress bar + percentage + timer */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <ShieldCheck className="h-5 w-5 text-blue-600" />
+              <ShieldCheck className="h-5 w-5 text-brand" />
               <span className="font-semibold text-sm">
                 Multi-Agent Review in Progress
               </span>
@@ -165,9 +165,9 @@ export function ProgressTracker({ progress }: ProgressTrackerProps) {
                     <div
                       className={`w-0.5 flex-1 min-h-4 ${
                         status === "completed"
-                          ? "bg-green-300"
+                          ? "bg-success/50"
                           : status === "running"
-                            ? "bg-blue-300"
+                            ? "bg-brand/50"
                             : "bg-gray-200"
                       }`}
                     />
@@ -182,8 +182,8 @@ export function ProgressTracker({ progress }: ProgressTrackerProps) {
                         status === "pending"
                           ? "text-gray-400"
                           : status === "running"
-                            ? "text-blue-700"
-                            : "text-gray-700"
+                            ? "text-brand"
+                            : "text-foreground"
                       }`}
                     >
                       {phase.label}
@@ -207,11 +207,11 @@ export function ProgressTracker({ progress }: ProgressTrackerProps) {
                             key={agentId}
                             className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${
                               agentState.status === "running"
-                                ? "border-blue-200 bg-blue-50/50"
+                                ? "border-brand/30 bg-info-light/50"
                                 : agentState.status === "done"
-                                  ? "border-green-200 bg-green-50/30"
+                                  ? "border-success/30 bg-success-light/30"
                                   : agentState.status === "error"
-                                    ? "border-red-200 bg-red-50/30"
+                                    ? "border-destructive/30 bg-destructive/5"
                                     : "border-gray-100 bg-gray-50/30"
                             }`}
                           >
@@ -236,7 +236,7 @@ export function ProgressTracker({ progress }: ProgressTrackerProps) {
 
         {/* Error display */}
         {progress.error && (
-          <div className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
             <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
             <span>{progress.error}</span>
           </div>
