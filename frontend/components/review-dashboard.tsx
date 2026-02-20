@@ -344,7 +344,7 @@ export function ReviewDashboard({ review }: ReviewDashboardProps) {
                 className="border-info/50 text-info hover:bg-info-light hover:text-info"
               >
                 <Download className="mr-1.5 h-4 w-4" />
-                Download PDF
+                Download Audit Justification
               </Button>
             </div>
           </CardContent>

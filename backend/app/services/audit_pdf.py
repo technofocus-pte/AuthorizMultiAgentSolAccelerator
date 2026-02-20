@@ -213,74 +213,31 @@ def _check_page_space(pdf: FPDF, needed: float) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Main PDF generator
+# Reusable section renderers
 # ---------------------------------------------------------------------------
 
-def generate_audit_justification_pdf(
+def _render_section_1_executive_summary(
+    pdf: FPDF,
     request_data: dict,
     synthesis: dict,
-    compliance_result: dict,
-    clinical_result: dict,
-    coverage_result: dict,
-    audit_trail: dict,
-) -> str:
-    """Generate a professional audit justification PDF.
-
-    Args:
-        request_data: Original prior auth request data.
-        synthesis: Orchestrator synthesis output (recommendation, confidence, etc.).
-        compliance_result: Compliance agent output.
-        clinical_result: Clinical reviewer agent output.
-        coverage_result: Coverage agent output.
-        audit_trail: Audit trail metadata dict.
-
-    Returns:
-        Base64-encoded PDF string.
-    """
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    recommendation = synthesis.get("recommendation", "pend_for_review")
-    confidence = synthesis.get("confidence", 0)
-    confidence_level = synthesis.get("confidence_level", "LOW")
-
-    pdf = _AuditPDF()
-    pdf.alias_nb_pages()
-    pdf.add_page()
-    pdf.set_auto_page_break(auto=True, margin=25)
-
-    # --- Disclaimer banner ---
-    pdf.set_fill_color(*_AMBER_FILL)
-    pdf.set_font("Helvetica", "BI", 8)
-    pdf.set_text_color(*_AMBER_TEXT)
-    pdf.multi_cell(
-        0, 4,
-        "WARNING: AI-ASSISTED DRAFT -- REVIEW REQUIRED. "
-        "All recommendations are drafts requiring human clinical review. "
-        "Coverage policies reflect Medicare LCDs/NCDs only. "
-        "Commercial and Medicare Advantage plans may differ.",
-        fill=True,
-    )
-    pdf.set_text_color(*_BLACK)
-    pdf.ln(6)
-
-    # =================================================================
-    # Section 1: Executive Summary
-    # =================================================================
+    recommendation: str,
+    confidence: float,
+    confidence_level: str,
+    now: str,
+) -> None:
+    """Section 1: Executive Summary."""
     _section_heading(pdf, 1, "Executive Summary")
-
     _decision_badge(pdf, recommendation)
-
     _kv(pdf, "Review Date", now)
     _kv(pdf, "Patient", f"{request_data.get('patient_name', 'N/A')} (DOB: {request_data.get('patient_dob', 'N/A')})")
     _kv(pdf, "Provider NPI", request_data.get("provider_npi", "N/A"))
     _kv(pdf, "Insurance ID", request_data.get("insurance_id") or "Not provided")
     _kv(pdf, "Diagnosis Codes", ", ".join(request_data.get("diagnosis_codes", [])))
     _kv(pdf, "Procedure Codes", ", ".join(request_data.get("procedure_codes", [])))
-
     pdf.set_font("Helvetica", "B", 9)
     pdf.cell(50, 6, "Confidence:")
     pdf.ln(1)
     _confidence_bar(pdf, confidence, confidence_level)
-
     summary_text = synthesis.get("summary", "N/A")
     pdf.set_font("Helvetica", "B", 9)
     pdf.cell(0, 6, "Summary:")
@@ -289,16 +246,19 @@ def generate_audit_justification_pdf(
     pdf.multi_cell(0, 5, _safe_str(summary_text))
     pdf.ln(4)
 
-    # =================================================================
-    # Section 2: Medical Necessity Assessment
-    # =================================================================
+
+def _render_section_2_medical_necessity(
+    pdf: FPDF,
+    coverage_result: dict,
+    clinical_result: dict,
+) -> None:
+    """Section 2: Medical Necessity Assessment."""
     _check_page_space(pdf, 40)
     _section_heading(pdf, 2, "Medical Necessity Assessment")
 
     # Provider info — normalize the data before rendering
     pv = coverage_result.get("provider_verification", {})
     if pv and isinstance(pv, dict):
-        # Extract name from various possible fields
         provider_name = pv.get("name", "")
         if not provider_name or provider_name == "N/A":
             for field in ["provider_name", "full_name", "last_name"]:
@@ -310,7 +270,6 @@ def generate_audit_justification_pdf(
                         provider_name = pv[field]
                     break
 
-        # Extract specialty from various possible fields
         specialty = pv.get("specialty", "")
         if isinstance(specialty, dict):
             specialty = specialty.get(
@@ -323,7 +282,6 @@ def generate_audit_justification_pdf(
                     specialty = pv[field]
                     break
 
-        # Normalize status
         pv_status = str(pv.get("status", "N/A")).upper()
         if pv_status in ("A", "ACTIVE"):
             pv_status = "VERIFIED"
@@ -416,13 +374,17 @@ def generate_audit_justification_pdf(
 
     pdf.ln(3)
 
-    # =================================================================
-    # Section 3: Criterion-by-Criterion Evaluation
-    # =================================================================
+
+def _render_section_3_criterion_evaluation(
+    pdf: FPDF,
+    coverage_result: dict,
+    synthesis: dict,
+    audit_trail: dict,
+) -> None:
+    """Section 3: Criterion-by-Criterion Evaluation."""
     _check_page_space(pdf, 40)
     _section_heading(pdf, 3, "Criterion-by-Criterion Evaluation")
 
-    # Use coverage criteria from agent, fall back to synthesis
     criteria = coverage_result.get("criteria_assessment", [])
     if not criteria:
         criteria = synthesis.get("criteria_assessment", [])
@@ -433,7 +395,6 @@ def generate_audit_justification_pdf(
         pdf.cell(0, 6, f"Criteria Met: {met_count}")
         pdf.ln(6)
 
-        # Table: Criterion | Status | Confidence | Evidence
         col_widths = [55, 22, 22, 91]
         columns = [
             ("Criterion", col_widths[0]),
@@ -463,7 +424,6 @@ def generate_audit_justification_pdf(
                 status_col=1,
             )
     elif synthesis.get("coverage_criteria_met") or synthesis.get("coverage_criteria_not_met"):
-        # Fall back to synthesis met/not_met lists
         met_list = synthesis.get("coverage_criteria_met", [])
         not_met_list = synthesis.get("coverage_criteria_not_met", [])
         pdf.set_font("Helvetica", "B", 9)
@@ -509,13 +469,18 @@ def generate_audit_justification_pdf(
 
     pdf.ln(4)
 
-    # =================================================================
-    # Section 4: Validation Checks
-    # =================================================================
+
+def _render_section_4_validation_checks(
+    pdf: FPDF,
+    coverage_result: dict,
+    clinical_result: dict,
+    compliance_result: dict,
+) -> None:
+    """Section 4: Validation Checks."""
     _check_page_space(pdf, 40)
     _section_heading(pdf, 4, "Validation Checks")
 
-    # Provider verification
+    pv = coverage_result.get("provider_verification", {})
     if pv and isinstance(pv, dict):
         pv_status_display = str(pv.get("status", "N/A")).upper()
         if pv_status_display in ("A", "ACTIVE"):
@@ -524,7 +489,6 @@ def generate_audit_justification_pdf(
         pdf.cell(0, 6, f"Provider Verification: NPI {pv.get('npi', 'N/A')} - {pv_status_display}")
         pdf.ln(6)
 
-    # Diagnosis code table
     dx_val = clinical_result.get("diagnosis_validation", [])
     if dx_val:
         pdf.set_font("Helvetica", "B", 9)
@@ -554,7 +518,6 @@ def generate_audit_justification_pdf(
             )
         pdf.ln(4)
 
-    # Compliance checklist
     checklist = compliance_result.get("checklist", [])
     if checklist:
         _check_page_space(pdf, 30)
@@ -582,16 +545,21 @@ def generate_audit_justification_pdf(
             )
         pdf.ln(4)
 
-    # =================================================================
-    # Section 5: Decision Rationale
-    # =================================================================
+
+def _render_section_5_decision_rationale(
+    pdf: FPDF,
+    synthesis: dict,
+    recommendation: str,
+    confidence: float,
+    confidence_level: str,
+) -> None:
+    """Section 5: Decision Rationale."""
     _check_page_space(pdf, 40)
     _section_heading(pdf, 5, "Decision Rationale")
 
     _kv(pdf, "Decision", recommendation.upper(), bold_value=True)
     _kv(pdf, "Confidence", f"{confidence_level} ({int(confidence * 100)}%)")
 
-    # Render decision gates — the field may contain pipe-separated gates
     gate_raw = synthesis.get("decision_gate", "N/A")
     gate_parts = [g.strip() for g in str(gate_raw).split("|") if g.strip()]
     if len(gate_parts) > 1:
@@ -614,7 +582,6 @@ def generate_audit_justification_pdf(
                 pdf.cell(15, 5, "[FAIL]")
             pdf.set_text_color(*_BLACK)
             pdf.set_font("Helvetica", "", 9)
-            # Remove redundant PASS/FAIL prefix from text
             gate_text = gp
             for prefix in ("PASS - ", "PASS -", "FAIL - ", "FAIL -"):
                 idx = gate_text.upper().find(prefix)
@@ -631,7 +598,6 @@ def generate_audit_justification_pdf(
     pdf.multi_cell(0, 5, _safe_str(rationale))
     pdf.ln(3)
 
-    # Supporting facts
     met_criteria = synthesis.get("coverage_criteria_met", [])
     if met_criteria:
         pdf.set_font("Helvetica", "B", 9)
@@ -641,9 +607,12 @@ def generate_audit_justification_pdf(
             _bullet(pdf, m)
     pdf.ln(3)
 
-    # =================================================================
-    # Section 6: Documentation Gaps
-    # =================================================================
+
+def _render_section_6_documentation_gaps(
+    pdf: FPDF,
+    coverage_result: dict,
+) -> None:
+    """Section 6: Documentation Gaps."""
     gaps = coverage_result.get("documentation_gaps", [])
     if gaps:
         _check_page_space(pdf, 30)
@@ -653,7 +622,7 @@ def generate_audit_justification_pdf(
             if isinstance(g, dict):
                 critical = g.get("critical", False)
                 label = "[CRITICAL]" if critical else "[Non-critical]"
-                pdf.set_x(10)  # Reset to left margin before each gap
+                pdf.set_x(10)
                 pdf.set_font("Helvetica", "B", 9)
                 if critical:
                     pdf.set_text_color(*_RED_TEXT)
@@ -672,13 +641,15 @@ def generate_audit_justification_pdf(
 
         pdf.ln(3)
 
-    # =================================================================
-    # Section 7: Audit Trail
-    # =================================================================
+
+def _render_section_7_audit_trail(
+    pdf: FPDF,
+    audit_trail: dict,
+) -> None:
+    """Section 7: Audit Trail."""
     _check_page_space(pdf, 40)
     _section_heading(pdf, 7, "Audit Trail")
 
-    # Data sources
     data_sources = audit_trail.get("data_sources", [])
     if data_sources:
         pdf.set_font("Helvetica", "B", 9)
@@ -695,9 +666,9 @@ def generate_audit_justification_pdf(
     _kv(pdf, "Criteria Met", audit_trail.get("criteria_met_count", "0/0"))
     pdf.ln(3)
 
-    # =================================================================
-    # Section 8: Regulatory Compliance
-    # =================================================================
+
+def _render_section_8_regulatory_compliance(pdf: FPDF) -> None:
+    """Section 8: Regulatory Compliance."""
     _check_page_space(pdf, 30)
     _section_heading(pdf, 8, "Regulatory Compliance")
 
@@ -711,7 +682,9 @@ def generate_audit_justification_pdf(
     _bullet(pdf, "Unmet/insufficient criteria: Results in PEND (not DENY)")
     pdf.ln(4)
 
-    # --- Final disclaimer bar ---
+
+def _render_disclaimer_footer(pdf: FPDF, now: str) -> None:
+    """Final disclaimer bar and generation timestamp."""
     _check_page_space(pdf, 15)
     pdf.ln(4)
     pdf.set_fill_color(*_AMBER_FILL)
@@ -725,8 +698,6 @@ def generate_audit_justification_pdf(
         "require human clinical review before finalization.",
         fill=True,
     )
-
-    # --- Footer line ---
     pdf.set_text_color(*_GRAY_TEXT)
     pdf.set_font("Helvetica", "I", 7)
     pdf.ln(3)
@@ -735,6 +706,93 @@ def generate_audit_justification_pdf(
         f"Generated: {now} | AI-Assisted Prior Authorization Review System",
         align="C",
     )
+
+
+def _render_all_audit_sections(
+    pdf: FPDF,
+    request_data: dict,
+    synthesis: dict,
+    compliance_result: dict,
+    clinical_result: dict,
+    coverage_result: dict,
+    audit_trail: dict,
+    recommendation: str,
+    confidence: float,
+    confidence_level: str,
+    now: str,
+) -> None:
+    """Render all 8 standard audit sections onto the given PDF."""
+    _render_section_1_executive_summary(
+        pdf, request_data, synthesis, recommendation, confidence, confidence_level, now,
+    )
+    _render_section_2_medical_necessity(pdf, coverage_result, clinical_result)
+    _render_section_3_criterion_evaluation(pdf, coverage_result, synthesis, audit_trail)
+    _render_section_4_validation_checks(pdf, coverage_result, clinical_result, compliance_result)
+    _render_section_5_decision_rationale(pdf, synthesis, recommendation, confidence, confidence_level)
+    _render_section_6_documentation_gaps(pdf, coverage_result)
+    _render_section_7_audit_trail(pdf, audit_trail)
+    _render_section_8_regulatory_compliance(pdf)
+
+
+# ---------------------------------------------------------------------------
+# Main PDF generator
+# ---------------------------------------------------------------------------
+
+def generate_audit_justification_pdf(
+    request_data: dict,
+    synthesis: dict,
+    compliance_result: dict,
+    clinical_result: dict,
+    coverage_result: dict,
+    audit_trail: dict,
+) -> str:
+    """Generate a professional audit justification PDF.
+
+    Args:
+        request_data: Original prior auth request data.
+        synthesis: Orchestrator synthesis output (recommendation, confidence, etc.).
+        compliance_result: Compliance agent output.
+        clinical_result: Clinical reviewer agent output.
+        coverage_result: Coverage agent output.
+        audit_trail: Audit trail metadata dict.
+
+    Returns:
+        Base64-encoded PDF string.
+    """
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    recommendation = synthesis.get("recommendation", "pend_for_review")
+    confidence = synthesis.get("confidence", 0)
+    confidence_level = synthesis.get("confidence_level", "LOW")
+
+    pdf = _AuditPDF()
+    pdf.alias_nb_pages()
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=25)
+
+    # --- Disclaimer banner ---
+    pdf.set_fill_color(*_AMBER_FILL)
+    pdf.set_font("Helvetica", "BI", 8)
+    pdf.set_text_color(*_AMBER_TEXT)
+    pdf.multi_cell(
+        0, 4,
+        "WARNING: AI-ASSISTED DRAFT -- REVIEW REQUIRED. "
+        "All recommendations are drafts requiring human clinical review. "
+        "Coverage policies reflect Medicare LCDs/NCDs only. "
+        "Commercial and Medicare Advantage plans may differ.",
+        fill=True,
+    )
+    pdf.set_text_color(*_BLACK)
+    pdf.ln(6)
+
+    # Render all 8 sections using shared helpers
+    _render_all_audit_sections(
+        pdf, request_data, synthesis, compliance_result, clinical_result,
+        coverage_result, audit_trail, recommendation, confidence,
+        confidence_level, now,
+    )
+
+    # --- Final disclaimer and footer ---
+    _render_disclaimer_footer(pdf, now)
 
     # --- Output to base64 ---
     buf = io.BytesIO()
@@ -752,15 +810,14 @@ def regenerate_audit_pdf_with_override(
     final_recommendation: str,
     decided_at: str,
 ) -> str:
-    """Regenerate the audit PDF with an additional Section 9: Clinician Override.
+    """Regenerate the full audit PDF with all 8 sections plus Section 9: Clinician Override.
 
-    Re-generates the full audit PDF and appends override information.
+    Re-generates the complete audit justification document (Sections 1-8)
+    and appends a Section 9 with override details, so the PDF is clearly
+    an audit document rather than a notification letter.
+
     Returns base64-encoded PDF string.
     """
-    # First generate the base PDF content by calling the original function
-    # but we'll build it ourselves to append a section.
-    # For simplicity, decode the original, but fpdf2 doesn't support appending.
-    # Instead, we add the override section to the data and regenerate.
     request_data = original_args.get("request_data", {})
     synthesis = original_args.get("synthesis", {})
     compliance_result = original_args.get("compliance_result", {})
@@ -809,37 +866,26 @@ def regenerate_audit_pdf_with_override(
         pdf.set_text_color(*_BLACK)
     pdf.ln(6)
 
-    # --- Re-render all 8 original sections ---
-    # (delegate to original function internals by calling it and decoding,
-    #  but since we can't easily append to a PDF, we replicate the key sections
-    #  in a streamlined way and add Section 9)
+    # --- Render ALL 8 original audit sections ---
+    # Section 1 uses the final (overridden) recommendation in its decision badge
+    # so the PDF clearly reflects the clinician's decision.
+    _render_section_1_executive_summary(
+        pdf, request_data, synthesis,
+        final_recommendation if was_overridden else recommendation,
+        confidence, confidence_level, now,
+    )
+    _render_section_2_medical_necessity(pdf, coverage_result, clinical_result)
+    _render_section_3_criterion_evaluation(pdf, coverage_result, synthesis, audit_trail)
+    _render_section_4_validation_checks(pdf, coverage_result, clinical_result, compliance_result)
+    _render_section_5_decision_rationale(pdf, synthesis, recommendation, confidence, confidence_level)
+    _render_section_6_documentation_gaps(pdf, coverage_result)
+    _render_section_7_audit_trail(pdf, audit_trail)
+    _render_section_8_regulatory_compliance(pdf)
 
-    # Section 1: Executive Summary (abbreviated)
-    _section_heading(pdf, 1, "Executive Summary")
-    _decision_badge(pdf, final_recommendation if was_overridden else recommendation)
-    _kv(pdf, "Review Date", now)
-    _kv(pdf, "Patient", f"{request_data.get('patient_name', 'N/A')} (DOB: {request_data.get('patient_dob', 'N/A')})")
-    _kv(pdf, "Provider NPI", request_data.get("provider_npi", "N/A"))
-    _kv(pdf, "Insurance ID", request_data.get("insurance_id") or "Not provided")
-    _kv(pdf, "Diagnosis Codes", ", ".join(request_data.get("diagnosis_codes", [])))
-    _kv(pdf, "Procedure Codes", ", ".join(request_data.get("procedure_codes", [])))
-    pdf.set_font("Helvetica", "B", 9)
-    pdf.cell(50, 6, "AI Confidence:")
-    pdf.ln(1)
-    _confidence_bar(pdf, confidence, confidence_level)
-    summary_text = synthesis.get("summary", "N/A")
-    pdf.set_font("Helvetica", "B", 9)
-    pdf.cell(0, 6, "Summary:")
-    pdf.ln(5)
-    pdf.set_font("Helvetica", "", 9)
-    pdf.multi_cell(0, 5, _safe_str(summary_text))
-    pdf.ln(4)
-
-    # Section 9: Clinician Override (new section, rendered prominently)
+    # --- Section 9: Clinician Override Record (new section) ---
     _check_page_space(pdf, 60)
     _section_heading(pdf, 9, "Clinician Override Record")
 
-    # Override details
     _kv(pdf, "Override Status", "YES -- Decision was overridden", bold_value=True)
     _kv(pdf, "Overridden By", override_reviewer, bold_value=True)
     _kv(pdf, "Override Date", decided_at)
@@ -869,35 +915,7 @@ def regenerate_audit_pdf_with_override(
     pdf.set_text_color(*_BLACK)
     pdf.ln(6)
 
-    # Continue with remaining original sections (5-8) for context
-    # Section 5: Decision Rationale (AI)
-    _check_page_space(pdf, 40)
-    _section_heading(pdf, 5, "AI Decision Rationale (Pre-Override)")
-    _kv(pdf, "AI Decision", recommendation.upper(), bold_value=True)
-    _kv(pdf, "AI Confidence", f"{confidence_level} ({int(confidence * 100)}%)")
-
-    rationale = synthesis.get("clinical_rationale", "No rationale provided.")
-    pdf.set_font("Helvetica", "", 9)
-    pdf.multi_cell(0, 5, _safe_str(rationale))
-    pdf.ln(3)
-
-    # Section 7: Audit Trail
-    _check_page_space(pdf, 40)
-    _section_heading(pdf, 7, "Audit Trail")
-    data_sources = audit_trail.get("data_sources", [])
-    if data_sources:
-        pdf.set_font("Helvetica", "B", 9)
-        pdf.cell(0, 6, "Data Sources:")
-        pdf.ln(5)
-        for src in data_sources:
-            _bullet(pdf, src)
-        pdf.ln(3)
-    _kv(pdf, "Review Started", audit_trail.get("review_started", "N/A"))
-    _kv(pdf, "Review Completed", audit_trail.get("review_completed", "N/A"))
-    _kv(pdf, "Decision Overridden At", decided_at)
-    pdf.ln(3)
-
-    # Final disclaimer
+    # --- Override-specific disclaimer and footer ---
     _check_page_space(pdf, 15)
     pdf.ln(4)
     pdf.set_fill_color(*_AMBER_FILL)

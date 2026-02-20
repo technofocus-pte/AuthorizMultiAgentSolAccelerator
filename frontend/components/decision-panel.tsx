@@ -217,7 +217,7 @@ export function DecisionPanel({ review, onDecision }: Props) {
           <div className="flex items-center gap-3">
             <Button onClick={handleDownload} className="bg-gradient-to-r from-brand to-brand-dark hover:from-brand-hover hover:to-brand-hover-dark text-white shadow-sm">
               <Download className="mr-2 h-4 w-4" />
-              Download Letter
+              Download Notification Letter
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
