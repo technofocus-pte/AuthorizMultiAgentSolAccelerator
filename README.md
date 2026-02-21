@@ -99,7 +99,7 @@ confidence scoring, progressive gate evaluation, and structured audit trails.
 │  │  In-memory review store for persistence                 │  │
 │  └────────────────────────────────────────────────────────┘  │
 │                                                              │
-│  Azure Foundry (Claude model endpoint + API key)             │
+│  Microsoft AI Foundry (Claude model endpoint + API key)      │
 └──────────────────────┬───────────────────────────────────────┘
                        │  Streamable HTTP (MCP protocol)
                        │  Header: User-Agent: claude-code/1.0
@@ -601,8 +601,8 @@ prior-auth-maf/
 
 - **Python 3.11+**
 - **Node.js 18+**
-- **Azure AI Foundry account** with access to Claude models
-- Azure Foundry API key and endpoint
+- **Microsoft AI Foundry account** with access to Claude models
+- Microsoft AI Foundry API key and endpoint
 
 ---
 
@@ -634,7 +634,7 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Edit `.env` and set your Azure Foundry credentials:
+Edit `.env` and set your Microsoft AI Foundry credentials:
 
 ```env
 AZURE_FOUNDRY_API_KEY=your-azure-foundry-api-key
@@ -1359,7 +1359,7 @@ variables for Azure authentication: `CLAUDE_CODE_USE_FOUNDRY=true`,
 these, the CLI fails at startup with "Failed to start Claude Code:".
 
 **Fix:** Overrides `ANTHROPIC_API_KEY` and `ANTHROPIC_BASE_URL` with the
-real Azure Foundry credentials from the `.env` file
+real Microsoft AI Foundry credentials from the `.env` file
 (`AZURE_FOUNDRY_API_KEY` / `AZURE_FOUNDRY_ENDPOINT`), and also sets the
 Foundry-specific env vars (`CLAUDE_CODE_USE_FOUNDRY=true`,
 `ANTHROPIC_FOUNDRY_API_KEY`, `ANTHROPIC_FOUNDRY_BASE_URL`).
@@ -1369,7 +1369,7 @@ Foundry-specific env vars (`CLAUDE_CODE_USE_FOUNDRY=true`,
 The Claude Agent SDK's `ClaudeAgentSettings` reads the model from the
 `CLAUDE_AGENT_MODEL` environment variable (not `CLAUDE_MODEL`). Without
 this mapping, the CLI defaults to `claude-sonnet-4-5-20250929`, which may
-not be available on Azure Foundry endpoints.
+not be available on Microsoft AI Foundry endpoints.
 
 **Fix:** Maps `CLAUDE_MODEL` from `.env` to `CLAUDE_AGENT_MODEL` so the
 SDK uses the correct model (e.g., `claude-opus-4-5`).
@@ -1514,7 +1514,7 @@ pend types), and structured audit trails.
 | Token efficiency | Progressive disclosure — only loaded when invoked | Full prompt (~1,200-1,500 tokens per agent) | Progressive disclosure per subskill |
 | Prompt vetting | Best of both: Anthropic patterns + our enhancements | Same content as skills mode (synced) | Anthropic's internal clinical review |
 | Parallelism | Multi-agent, concurrent | Multi-agent, concurrent | Single agent, sequential |
-| Platform | Azure Foundry via MAF | Azure Foundry via MAF | Claude Code with Skills API beta headers |
+| Platform | Microsoft AI Foundry via MAF | Microsoft AI Foundry via MAF | Claude Code with Skills API beta headers |
 | Confidence formula | Explicit weighted (4 components) | Explicit weighted (4 components, synced) | Subjective assessment |
 | Toggle | `USE_SKILLS=true` (default) | `USE_SKILLS=false` | N/A |
 
@@ -1950,7 +1950,7 @@ The app runs as two containers — a Python backend and an Nginx frontend:
 │  ClaudeAgent (MS Agent Framework)                          │
 │    └── claude-agent-sdk                                    │
 │         └── bundled Claude Code CLI (in platform wheel)    │
-│              ├── Azure Foundry API (via env vars)          │
+│              ├── Microsoft AI Foundry API (via env vars)   │
 │              └── MCP Servers (NPI, ICD-10, CMS, PubMed,   │
 │                   Clinical Trials)                         │
 └────────────────────────────────────────────────────────────┘
@@ -1977,7 +1977,7 @@ back to a system-installed `claude` CLI via `shutil.which("claude")`.
 ### Prerequisites
 
 - Docker Desktop (or any OCI container runtime with compose support)
-- Azure Foundry API key and endpoint
+- Microsoft AI Foundry API key and endpoint
 
 ### Container details
 
@@ -2016,7 +2016,7 @@ Foundry credentials to the environment variables the Claude Code CLI expects:
 
 | Your `.env` variable | Maps to (container) | Purpose |
 |----------------------|---------------------|---------|
-| `AZURE_FOUNDRY_API_KEY` | `ANTHROPIC_FOUNDRY_API_KEY` | Azure Foundry auth |
+| `AZURE_FOUNDRY_API_KEY` | `ANTHROPIC_FOUNDRY_API_KEY` | Microsoft AI Foundry auth |
 | `AZURE_FOUNDRY_ENDPOINT` | `ANTHROPIC_FOUNDRY_BASE_URL` | Foundry endpoint URL |
 | (set automatically) | `CLAUDE_CODE_USE_FOUNDRY=true` | Enables Foundry mode |
 
@@ -2240,7 +2240,7 @@ Microsoft.
 - [Prior Auth Review Skill](https://github.com/anthropics/healthcare/tree/main/prior-auth-review-skill)
 - [Build AI Agents with Claude Agent SDK and Microsoft Agent Framework](https://devblogs.microsoft.com/semantic-kernel/build-ai-agents-with-claude-agent-sdk-and-microsoft-agent-framework/)
 - [Microsoft Agent Framework — Claude Agent](https://learn.microsoft.com/en-us/agent-framework/user-guide/agents/agent-types/anthropic-agent)
-- [Azure Foundry Claude Models](https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-models/how-to/use-foundry-models-claude)
+- [Microsoft AI Foundry Claude Models](https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-models/how-to/use-foundry-models-claude)
 - [Claude Prior Auth Review Tutorial](https://claude.com/resources/tutorials/how-to-use-the-prior-auth-review-sample-skill-with-claude-2ggy8)
 - [Model Context Protocol (MCP)](https://modelcontextprotocol.io/)
 - [Claude Agent SDK](https://platform.claude.com/docs/en/agent-sdk/overview)
