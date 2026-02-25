@@ -32,5 +32,10 @@ class Settings:
         "MCP_CLINICAL_TRIALS", "https://mcp.deepsense.ai/clinical_trials/mcp"
     )
 
+    # Azure Application Insights (observability)
+    APPLICATION_INSIGHTS_CONNECTION_STRING: str = os.getenv(
+        "APPLICATION_INSIGHTS_CONNECTION_STRING", ""
+    )
+
 
 settings = Settings()

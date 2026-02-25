@@ -38,6 +38,28 @@ from app.services.cpt_validation import validate_procedure_codes
 
 logger = logging.getLogger(__name__)
 
+# OpenTelemetry tracer for custom spans (no-op if observability not configured)
+try:
+    from agent_framework.observability import get_tracer
+    tracer = get_tracer(__name__)
+except ImportError:
+    from contextlib import contextmanager
+
+    class _NoOpSpan:
+        """Minimal no-op span for when observability is not installed."""
+        def set_attribute(self, key: str, value: object) -> None: ...
+        def set_status(self, *args: object, **kwargs: object) -> None: ...
+        def record_exception(self, exc: BaseException) -> None: ...
+        def __enter__(self): return self
+        def __exit__(self, *args): ...
+
+    class _NoOpTracer:
+        @contextmanager
+        def start_as_current_span(self, name: str, **kwargs):
+            yield _NoOpSpan()
+
+    tracer = _NoOpTracer()  # type: ignore[assignment]
+
 _BACKEND_DIR = str(Path(__file__).resolve().parent.parent.parent)
 
 # Maximum number of retries when an agent returns an incomplete result
@@ -701,6 +723,19 @@ async def run_multi_agent_review(
         policy_references, disclaimer, agent_results, audit_trail,
         and audit_justification (markdown string).
     """
+    request_id = request_data.get("request_id", "unknown")
+
+    with tracer.start_as_current_span("prior_auth_review") as root_span:
+        root_span.set_attribute("request_id", request_id)
+        return await _run_review_pipeline(request_data, on_progress, root_span)
+
+
+async def _run_review_pipeline(
+    request_data: dict,
+    on_progress: Callable[[dict], Awaitable[None]] | None,
+    root_span,
+) -> dict:
+    """Inner pipeline — extracted so the top-level span wraps everything."""
     start_time = datetime.now(timezone.utc).isoformat()
 
     async def _emit(event: dict) -> None:
@@ -733,16 +768,22 @@ async def run_multi_agent_review(
         },
     })
 
-    compliance_task = asyncio.create_task(
-        _safe_run("Compliance Agent", run_compliance_review, request_data)
-    )
-    clinical_task = asyncio.create_task(
-        _safe_run("Clinical Reviewer Agent", run_clinical_review, request_data)
-    )
+    with tracer.start_as_current_span("phase_1_parallel") as p1_span:
+        compliance_task = asyncio.create_task(
+            _safe_run("Compliance Agent", run_compliance_review, request_data)
+        )
+        clinical_task = asyncio.create_task(
+            _safe_run("Clinical Reviewer Agent", run_clinical_review, request_data)
+        )
 
-    compliance_result, clinical_result = await asyncio.gather(
-        compliance_task, clinical_task
-    )
+        compliance_result, clinical_result = await asyncio.gather(
+            compliance_task, clinical_task
+        )
+
+        p1_span.set_attribute("agent.compliance.status",
+                              "error" if compliance_result.get("error") else "success")
+        p1_span.set_attribute("agent.clinical.status",
+                              "error" if clinical_result.get("error") else "success")
 
     # Diagnostic: dump agent result keys and sample values for debugging
     _dump_agent_result("Compliance", compliance_result)
@@ -786,12 +827,16 @@ async def run_multi_agent_review(
         },
     })
 
-    coverage_result = await _safe_run(
-        "Coverage Agent", run_coverage_review, request_data, clinical_result
-    )
+    with tracer.start_as_current_span("phase_2_coverage") as p2_span:
+        coverage_result = await _safe_run(
+            "Coverage Agent", run_coverage_review, request_data, clinical_result
+        )
 
-    # Normalize coverage result (fix provider data format, etc.)
-    coverage_result = _normalize_coverage_result(coverage_result)
+        # Normalize coverage result (fix provider data format, etc.)
+        coverage_result = _normalize_coverage_result(coverage_result)
+
+        p2_span.set_attribute("agent.coverage.status",
+                              "error" if coverage_result.get("error") else "success")
 
     # Diagnostic: dump coverage agent result
     _dump_agent_result("Coverage", coverage_result)
@@ -818,10 +863,16 @@ async def run_multi_agent_review(
         },
     })
 
-    synthesis = await _run_synthesis(
-        request_data, compliance_result, clinical_result, coverage_result,
-        cpt_validation,
-    )
+    with tracer.start_as_current_span("phase_3_synthesis") as p3_span:
+        synthesis = await _run_synthesis(
+            request_data, compliance_result, clinical_result, coverage_result,
+            cpt_validation,
+        )
+
+        p3_span.set_attribute("synthesis.recommendation",
+                              synthesis.get("recommendation", "unknown"))
+        p3_span.set_attribute("synthesis.confidence",
+                              synthesis.get("confidence", 0.0))
 
     # Coerce list[str] fields from synthesis — agent may return list[dict]
     for _str_list_key in (
@@ -852,30 +903,34 @@ async def run_multi_agent_review(
         "agents": {},
     })
 
-    confidence, confidence_level = _compute_confidence(
-        compliance_result, clinical_result, coverage_result
-    )
+    with tracer.start_as_current_span("phase_4_audit") as p4_span:
+        confidence, confidence_level = _compute_confidence(
+            compliance_result, clinical_result, coverage_result
+        )
 
-    # Use synthesis confidence if available, fall back to computed
-    final_confidence = synthesis.get("confidence", confidence)
-    final_level = synthesis.get("confidence_level", confidence_level)
+        # Use synthesis confidence if available, fall back to computed
+        final_confidence = synthesis.get("confidence", confidence)
+        final_level = synthesis.get("confidence_level", confidence_level)
 
-    audit_trail = _build_audit_trail(
-        compliance_result, clinical_result, coverage_result, start_time,
-        synthesis=synthesis,
-    )
+        audit_trail = _build_audit_trail(
+            compliance_result, clinical_result, coverage_result, start_time,
+            synthesis=synthesis,
+        )
 
-    audit_justification = _generate_audit_justification(
-        request_data, synthesis,
-        compliance_result, clinical_result, coverage_result,
-        audit_trail,
-    )
+        audit_justification = _generate_audit_justification(
+            request_data, synthesis,
+            compliance_result, clinical_result, coverage_result,
+            audit_trail,
+        )
 
-    audit_justification_pdf = generate_audit_justification_pdf(
-        request_data, synthesis,
-        compliance_result, clinical_result, coverage_result,
-        audit_trail,
-    )
+        audit_justification_pdf = generate_audit_justification_pdf(
+            request_data, synthesis,
+            compliance_result, clinical_result, coverage_result,
+            audit_trail,
+        )
+
+        p4_span.set_attribute("audit.confidence", final_confidence)
+        p4_span.set_attribute("audit.confidence_level", final_level)
 
     # --- Assemble final response ---
     all_tool_results = []

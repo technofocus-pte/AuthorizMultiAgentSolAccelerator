@@ -7,3 +7,4 @@ python-multipart>=0.0.9
 mcp>=1.0.0
 agent-framework-claude
 fpdf2>=2.8.0
+azure-monitor-opentelemetry>=1.6.0
