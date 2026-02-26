@@ -33,7 +33,7 @@ confidence scoring, progressive gate evaluation, and structured audit trails.
 
 ---
 
-<h2><img src="./docs/images/readme/solution-overview.svg" width="48" />
+<h2 id="solution-overview"><img src="./docs/images/readme/solution-overview.svg" width="48" />
 Solution overview
 </h2>
 
@@ -297,7 +297,7 @@ The orchestrator coordinates four phases with three specialized agents:
 
 ---
 
-<h2><img src="./docs/images/readme/business-scenario.svg" width="48" />
+<h2 id="business-scenario"><img src="./docs/images/readme/business-scenario.svg" width="48" />
 Business Scenario
 </h2>
 
@@ -358,7 +358,7 @@ PA request        →     checks completeness  →    evaluates medical    →  
 
 ---
 
-<h2><img src="./docs/images/readme/quick-deploy.svg" width="48" />
+<h2 id="quick-deploy"><img src="./docs/images/readme/quick-deploy.svg" width="48" />
 Quick deploy
 </h2>
 
@@ -523,7 +523,7 @@ The `docker-compose.yml` reads your `backend/.env` file and maps credentials:
 
 ---
 
-<h2><img src="./docs/images/readme/supporting-documentation.svg" width="48" />
+<h2 id="supporting-documentation"><img src="./docs/images/readme/supporting-documentation.svg" width="48" />
 Supporting documentation
 </h2>
 
