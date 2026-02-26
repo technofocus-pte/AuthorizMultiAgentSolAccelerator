@@ -1689,32 +1689,33 @@ to every object node, preventing the LLM from inventing custom field names.
 **JSON output enforcement:**
 
 The `output_format` option is passed to the Claude Code CLI as `--json-schema`,
-which provides schema guidance at the model level. However, due to a known
-limitation in `agent_framework_claude` (the `structured_output` field from the
-CLI's `ResultMessage` is not propagated to `AgentResponse`), the structured
-output cannot be accessed programmatically.
+which constrains the model to produce JSON matching the full schema before the
+response is considered complete. Since
+[PR #4137](https://github.com/microsoft/agent-framework/pull/4137)
+(shipped in `agent-framework-claude` v1.0.0b260225), `structured_output`
+from the CLI's `ResultMessage` is properly propagated to
+`AgentResponse.value`, so `parse_json_response()` can access it directly
+via Strategy 0 — no text parsing needed.
 
-> **Why this matters:** When structured output works correctly at the API level,
-> the model is constrained to produce JSON matching the full schema before the
-> response is considered complete. The API will not return a partial response —
-> it keeps generating tokens until every required field is populated and the JSON
-> is valid. This makes mid-response truncation impossible. Without it, the model
-> produces free-text with embedded JSON, which can be cut off at any point by
-> the CLI or API layer — resulting in missing fields and silent data loss.
+> **Why this matters:** The API will not return a partial response — it keeps
+> generating tokens until every required field is populated and the JSON is
+> valid. This makes mid-response truncation impossible.
 
-As a workaround, all agent instructions include a mandate to respond with
-JSON inside a `` ```json `` code fence:
+As a **defense-in-depth** measure, all agent instructions still include a
+mandate to respond with JSON inside a `` ```json `` code fence. This costs
+~30 tokens per prompt and provides a safety net if the structured output
+pathway ever regresses:
 
 ```
 CRITICAL: Your FINAL response MUST be a single valid JSON object
 inside a ```json code fence. No markdown commentary outside the fence.
 ```
 
-**Resilience workarounds (for truncated/incomplete responses):**
+**Resilience mechanisms:**
 
-Because `structured_output` is not available, agent responses can occasionally
-be truncated by the CLI or Azure API, producing incomplete JSON. The following
-mechanisms mitigate this:
+Even though `structured_output` is now available via `response.value`,
+the following defense-in-depth mechanisms remain active to handle edge
+cases and future regressions:
 
 | Mechanism | Where | What it does |
 |-----------|-------|-------------|
@@ -1737,8 +1738,8 @@ Agent `max_turns` configuration:
 
 | Strategy | Method | Status |
 |----------|--------|--------|
-| Strategy 0 | `response.structured_output` | Blocked by framework bug — ready to use when fixed |
-| **Strategy 1** | **Markdown code fence extraction** | **Primary path — used by all agents** |
+| **Strategy 0** | **`response.value` / `response.structured_output`** | **Primary path — active since PR #4137** |
+| Strategy 1 | Markdown code fence extraction | Defense-in-depth fallback |
 | Strategy 2 | Brace-matched backward extraction | Fallback |
 | Strategy 3 | First-`{` to last-`}` substring | Legacy fallback |
 
@@ -2255,9 +2256,9 @@ issubclass(ClaudeAgent, Agent)  # False ← should be True
 
 | Item | Detail |
 |------|--------|
-| **Package** | `agent-framework-claude` v1.0.0b260212 |
+| **Package** | `agent-framework-claude` v1.0.0b260225 |
 | **Impact** | Agents invisible in App Insights Agents (Preview) view |
-| **Fix** | Change `ClaudeAgent(BaseAgent)` → `ClaudeAgent(Agent)` in SDK |
+| **Fix** | Change `ClaudeAgent(BaseAgent)` → `ClaudeAgent(Agent)` in SDK + ensure `run()` flows through telemetry chain |
 | **Our action** | None required — existing `enable_instrumentation()` call will auto-detect the fix |
 | **Status** | Bug filed with MAF team |
 
@@ -2276,7 +2277,23 @@ LLM calls, MCP tool executions, token usage per agent).
 | **Impact** | No drill-down into agent internals (LLM calls, tool calls, tokens) |
 | **Fix** | Anthropic to add `OTEL_TRACES_EXPORTER` support with `gen_ai.chat` and `gen_ai.execute_tool` spans |
 | **Our action** | Likely minimal config changes once available (pass env vars to subprocess) |
-| **Status** | Feature request filed with Anthropic ([claude-agent-sdk-python](https://github.com/anthropics/claude-agent-sdk-python/issues)) |
+| **Status** | Feature request filed with Anthropic ([claude-agent-sdk-python#611](https://github.com/anthropics/claude-agent-sdk-python/issues/611)) |
+
+#### Gap 3 — Trace context propagation (Requires Gap 1 + Gap 2)
+
+Even after Gaps 1 and 2 are fixed, spans from Claude CLI would appear as
+**disconnected traces** in App Insights — not nested under the orchestrator.
+This is because Claude CLI runs as a subprocess, so the W3C `traceparent`
+context must be explicitly passed from MAF to the CLI process.
+
+| Item | Detail |
+|------|--------|
+| **Requires** | Both MAF and Anthropic changes |
+| **MAF side** | Inject `TRACEPARENT` env var into CLI subprocess (safe to do now — ignored if CLI doesn't read it) |
+| **Anthropic side** | Read `TRACEPARENT` from env and use as parent span context |
+| **Impact** | Without this, tool/LLM spans from Gap 2 float as separate traces |
+| **Our action** | None — both SDK teams need to coordinate |
+| **Status** | Suggested to MAF team alongside Gap 1 fix |
 
 #### What works today
 
@@ -2288,6 +2305,7 @@ LLM calls, MCP tool executions, token usage per agent).
 | Heartbeat and platform metrics | ✅ Working |
 | Agent-level `gen_ai.invoke_agent` spans | ❌ Blocked by Gap 1 |
 | Agent internal LLM/tool spans | ❌ Blocked by Gap 2 |
+| Connected trace tree (agent → tool spans) | ❌ Blocked by Gap 3 |
 | Agents (Preview) view in App Insights | ❌ Blocked by Gap 1 |
 
 #### Troubleshooting traces
