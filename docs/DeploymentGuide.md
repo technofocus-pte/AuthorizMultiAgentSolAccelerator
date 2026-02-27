@@ -113,12 +113,20 @@ Select one of the following options to set up your deployment environment:
 <details>
 <summary><b>Option C: Visual Studio Code Web</b></summary>
 
-[![Open in VS Code Web](https://img.shields.io/static/v1?style=for-the-badge&label=VS%20Code%20Web&message=Open&color=blue&logo=visualstudiocode&logoColor=white)](https://vscode.dev/github/amitmukh/prior-auth-maf)
+[![Open in Visual Studio Code Web](https://img.shields.io/static/v1?style=for-the-badge&label=Visual%20Studio%20Code%20(Web)&message=Open&color=blue&logo=visualstudiocode&logoColor=white)](https://vscode.dev/azure/?vscode-azure-exp=foundry&agentPayload=eyJiYXNlVXJsIjogImh0dHBzOi8vcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbS9hbWl0bXVraC9wcmlvci1hdXRoLW1hZi9yZWZzL2hlYWRzL21haW4vaW5mcmEvdnNjb2RlX3dlYiIsICJpbmRleFVybCI6ICIvaW5kZXguanNvbiIsICJ2YXJpYWJsZXMiOiB7ImFnZW50SWQiOiAiIiwgImNvbm5lY3Rpb25TdHJpbmciOiAiIiwgInRocmVhZElkIjogIiIsICJ1c2VyTWVzc2FnZSI6ICIiLCAicGxheWdyb3VuZE5hbWUiOiAiIiwgImxvY2F0aW9uIjogIiIsICJzdWJzY3JpcHRpb25JZCI6ICIiLCAicmVzb3VyY2VJZCI6ICIiLCAicHJvamVjdFJlc291cmNlSWQiOiAiIiwgImVuZHBvaW50IjogIiJ9LCAiY29kZVJvdXRlIjogWyJhaS1wcm9qZWN0cy1zZGsiLCAicHl0aG9uIiwgImRlZmF1bHQtYXp1cmUtYXV0aCIsICJlbmRwb2ludCJdfQ==)
 
 1. Click the badge above (may take a few minutes to load)
-2. Sign in with your GitHub account when prompted
-3. Wait for the environment to initialize
-4. Proceed to [Step 3: Configure Deployment Settings](#step-3-configure-deployment-settings)
+2. Sign in with your Azure account when prompted
+3. Select the subscription where you want to deploy the solution
+4. Wait for the environment to initialize (includes all deployment tools)
+5. When prompted in the VS Code Web terminal, choose one of the available options
+6. **Authenticate with Azure** (VS Code Web requires device code authentication):
+   ```shell
+   az login --use-device-code
+   ```
+   > **Note:** In VS Code Web environment, the regular `az login` command may fail. Use the `--use-device-code` flag to authenticate via device code flow. Follow the prompts in the terminal to complete authentication.
+
+7. Proceed to [Step 3: Configure Deployment Settings](#step-3-configure-deployment-settings)
 
 </details>
 
