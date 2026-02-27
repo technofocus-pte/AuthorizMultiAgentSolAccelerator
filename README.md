@@ -266,6 +266,45 @@ This solution accelerator is designed to be extended:
 | **Compliance & security** | HIPAA-compliant infrastructure, encryption | Custom implementation |
 | **Scalability** | Azure Container Apps, Kubernetes | [Deployment Guide](./docs/DeploymentGuide.md) |
 
+### Security guidelines
+
+This solution accelerator handles **Protected Health Information (PHI)** and clinical data. Security best practices are critical for any deployment.
+
+All API keys and connection strings are stored in a local `.env` file that is excluded from source control via `.gitignore`. For Azure deployments, we recommend using [Azure Key Vault](https://learn.microsoft.com/azure/key-vault/general/overview) to manage secrets and [Managed Identity](https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/overview) to authenticate between Azure resources without storing credentials in code.
+
+To ensure continued best practices in your own repository, we recommend that anyone creating solutions based on our templates ensure that the [GitHub secret scanning](https://docs.github.com/code-security/secret-scanning/about-secret-scanning) setting is enabled.
+
+You may want to consider additional security measures, such as:
+
+* Enabling [Microsoft Defender for Cloud](https://learn.microsoft.com/azure/defender-for-cloud/) to secure your Azure resources.
+* Protecting the Azure Container Apps instance with a [firewall](https://learn.microsoft.com/azure/container-apps/waf-app-gateway) and/or [Virtual Network](https://learn.microsoft.com/azure/container-apps/networking?tabs=workload-profiles-env%2Cazure-cli).
+* Enabling [encryption at rest](https://learn.microsoft.com/azure/security/fundamentals/encryption-atrest) for all data stores containing PHI.
+* Implementing role-based access control (RBAC) to restrict who can submit, review, and override prior authorization decisions.
+* Ensuring HIPAA compliance by signing a [Business Associate Agreement (BAA)](https://learn.microsoft.com/azure/compliance/offerings/offering-hipaa-us) with Microsoft for production workloads.
+
+<br/>
+
+### Cross references
+
+Check out related solution accelerators from Microsoft
+
+| Solution Accelerator | Description |
+|---|---|
+| [Multi-Agent Custom Automation Engine](https://github.com/microsoft/Multi-Agent-Custom-Automation-Engine-Solution-Accelerator) | Build AI-driven orchestration systems that coordinate multiple specialized agents for complex business process automation |
+| [Document Knowledge Mining](https://github.com/microsoft/Document-Knowledge-Mining-Solution-Accelerator) | Extract structured information from unstructured documents using AI — applicable to clinical notes and medical records |
+| [Conversation Knowledge Mining](https://github.com/microsoft/Conversation-Knowledge-Mining-Solution-Accelerator) | Derive insights from volumes of conversational data using generative AI — applicable to patient-provider interactions |
+
+<br/>
+
+💡 Want to get familiar with Microsoft's AI and Data Engineering best practices? Check out our playbooks to learn more
+
+| Playbook | Description |
+|:---|:---|
+| [AI&nbsp;playbook](https://learn.microsoft.com/en-us/ai/playbook/) | The Artificial Intelligence (AI) Playbook provides enterprise software engineers with solutions, capabilities, and code developed to solve real-world AI problems. |
+| [Data&nbsp;playbook](https://learn.microsoft.com/en-us/data-engineering/playbook/understanding-data-playbook) | The data playbook provides enterprise software engineers with solutions which contain code developed to solve real-world problems. |
+
+<br/>
+
 ### Project structure
 
 ```
