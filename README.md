@@ -14,7 +14,7 @@ confidence scoring, progressive gate evaluation, and structured audit trails.
 
 <div align="center">
 
-[**SOLUTION OVERVIEW**](#solution-overview) \| [**BUSINESS SCENARIO**](#business-scenario) \| [**QUICK DEPLOY**](#quick-deploy) \| [**SUPPORTING DOCUMENTATION**](#supporting-documentation)
+[**SOLUTION OVERVIEW**](#solution-overview) \| [**QUICK DEPLOY**](#quick-deploy) \| [**BUSINESS SCENARIO**](#business-scenario) \| [**SUPPORTING DOCUMENTATION**](#supporting-documentation)
 
 </div>
 
@@ -30,6 +30,12 @@ confidence scoring, progressive gate evaluation, and structured audit trails.
 > specific requirements. Microsoft does not provide production support for this
 > accelerator. Customers are responsible for testing, validation, regulatory
 > compliance, and production deployment within their own environment.
+
+> **Note:** With any AI solutions you create using these templates, you are
+> responsible for assessing all associated risks and for complying with all
+> applicable laws and safety standards. Learn more in the transparency documents
+> for [Agent Service](https://learn.microsoft.com/en-us/azure/ai-foundry/responsible-ai/agents/transparency-note)
+> and [Agent Framework](https://github.com/microsoft/agent-framework/blob/main/TRANSPARENCY_FAQ.md).
 
 ---
 
@@ -139,6 +145,77 @@ The orchestrator coordinates four phases with three specialized agents:
 
 ---
 
+## <img src="./docs/images/readme/quick-deploy.svg" width="48" /> Quick deploy
+
+> 📖 **Deployment Guide:** For step-by-step deployment instructions including prerequisites, environment configuration, and Azure Container Apps setup, see the **[Deployment Guide](./docs/DeploymentGuide.md)**.
+
+### How to install or deploy
+
+Follow the quick deploy steps on the **[Deployment Guide](./docs/DeploymentGuide.md)** to deploy this solution to your own Azure subscription or run locally with Docker Compose.
+
+> ⚠️ **Important: Check Azure AI Foundry Quota Availability**
+> To ensure sufficient quota is available in your subscription, please follow the [quota check instructions](./docs/DeploymentGuide.md#14-claude-model-quota-check) before you deploy the solution.
+
+### Prerequisites & Costs
+
+To deploy this solution accelerator, ensure you have access to an [Azure subscription](https://azure.microsoft.com/free/) with the necessary permissions to create resource groups and resources.
+
+Check the [Azure Products by Region](https://azure.microsoft.com/en-us/explore/global-infrastructure/products-by-region/) page and select a region where the following services are available: Azure AI Foundry, Azure Container Apps, and Azure Container Registry.
+
+Recommended regions: East US, East US 2, West US 2, West Europe, Sweden Central.
+
+Pricing varies per region and usage, so it isn't possible to predict exact costs for your usage. The majority of the Azure resources used in this infrastructure are on usage-based pricing tiers. Use the [Azure pricing calculator](https://azure.microsoft.com/en-us/pricing/calculator) to estimate costs for your subscription.
+
+| Azure Service | Purpose | Pricing |
+|--------------|---------|---------|
+| [Azure AI Foundry](https://azure.microsoft.com/en-us/pricing/details/ai-foundry/) | Claude Sonnet 4.6 model inference | [Pricing](https://azure.microsoft.com/en-us/pricing/details/ai-foundry/) |
+| [Azure Container Apps](https://azure.microsoft.com/en-us/pricing/details/container-apps/) | Backend + frontend hosting | [Pricing](https://azure.microsoft.com/en-us/pricing/details/container-apps/) |
+| [Azure Container Registry](https://azure.microsoft.com/en-us/pricing/details/container-registry/) | Docker image storage | [Pricing](https://azure.microsoft.com/en-us/pricing/details/container-registry/) |
+| [Azure Application Insights](https://azure.microsoft.com/en-us/pricing/details/monitor/) | Observability and tracing (optional) | [Pricing](https://azure.microsoft.com/en-us/pricing/details/monitor/) |
+
+> ⚠️ **Important:** To avoid unnecessary costs, remember to take down your deployment if it's no longer in use, either by deleting the resource group in the Portal or running `docker compose down` for local deployments.
+
+### Quick Start (Docker Compose)
+
+The fastest way to get running locally:
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/amitmukh/prior-auth-maf.git
+cd prior-auth-maf
+
+# 2. Configure credentials
+cp backend/.env.example backend/.env
+# Edit backend/.env with your Azure AI Foundry API key and endpoint
+
+# 3. Build and start
+docker compose up --build
+
+# App available at http://localhost:3000
+```
+
+> 📖 See the **[Deployment Guide](./docs/DeploymentGuide.md)** for all deployment options including local development setup and Azure Container Apps cloud deployment.
+
+<details>
+  <summary><b>Environment variables reference</b></summary>
+
+  | Variable | Required | Default | Description |
+  |----------|----------|---------|-------------|
+  | `AZURE_FOUNDRY_API_KEY` | Yes | — | Microsoft AI Foundry API key |
+  | `AZURE_FOUNDRY_ENDPOINT` | Yes | — | Foundry endpoint URL |
+  | `CLAUDE_MODEL` | No | `claude-sonnet-4-6` | Claude model identifier |
+  | `USE_SKILLS` | No | `true` | Enable skills-based agent architecture |
+  | `APPLICATION_INSIGHTS_CONNECTION_STRING` | No | — | Azure App Insights connection string |
+  | `MCP_NPI_REGISTRY` | No | `https://mcp.deepsense.ai/npi_registry/mcp` | NPI Registry MCP (DeepSense) |
+  | `MCP_ICD10_CODES` | No | `https://mcp.deepsense.ai/icd10_codes/mcp` | ICD-10 Codes MCP (DeepSense) |
+  | `MCP_CMS_COVERAGE` | No | `https://mcp.deepsense.ai/cms_coverage/mcp` | CMS Coverage MCP (DeepSense) |
+  | `MCP_CLINICAL_TRIALS` | No | `https://mcp.deepsense.ai/clinical_trials/mcp` | Clinical Trials MCP (DeepSense) |
+  | `MCP_PUBMED` | No | `https://pubmed.mcp.claude.com/mcp` | PubMed MCP (Anthropic) |
+
+</details>
+
+---
+
 ## <img src="./docs/images/readme/business-scenario.svg" width="48" /> Business Scenario
 
 ### What is prior authorization?
@@ -195,75 +272,6 @@ flowchart LR
 
 ---
 
-## <img src="./docs/images/readme/quick-deploy.svg" width="48" /> Quick deploy
-
-> 📖 **Deployment Guide:** For step-by-step deployment instructions including prerequisites, environment configuration, and Azure Container Apps setup, see the **[Deployment Guide](./docs/DeploymentGuide.md)**.
-
-### Prerequisites & Costs
-
-The following are required to deploy this solution accelerator:
-
-| Prerequisite | Purpose | Required |
-|-------------|---------|----------|
-| [Azure subscription](https://azure.microsoft.com/free/) | Host cloud resources | Yes (cloud deploy) |
-| [Azure AI Foundry](https://learn.microsoft.com/en-us/azure/ai-foundry/) account | Claude Sonnet 4.6 model access | Yes |
-| [Python 3.11+](https://www.python.org/downloads/) | Backend runtime | Yes (local dev) |
-| [Node.js 18+](https://nodejs.org/) | Frontend build | Yes (local dev) |
-| [Docker Desktop](https://www.docker.com/products/docker-desktop/) | Container builds | Yes (Docker deploy) |
-| [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli) | Cloud deployment | Yes (cloud deploy) |
-
-**Estimated Azure Costs:**
-
-| Azure Service | Purpose | Pricing |
-|--------------|---------|---------|
-| [Azure AI Foundry](https://azure.microsoft.com/en-us/pricing/details/ai-foundry/) | Claude Sonnet 4.6 inference | Pay-per-token |
-| [Azure Container Apps](https://azure.microsoft.com/en-us/pricing/details/container-apps/) | Backend + frontend hosting | Consumption-based |
-| [Azure Container Registry](https://azure.microsoft.com/en-us/pricing/details/container-registry/) | Docker image storage | Basic tier |
-| [Azure Application Insights](https://azure.microsoft.com/en-us/pricing/details/monitor/) | Observability (optional) | Pay-per-GB ingested |
-
-> ⚠️ **Quota Required:** Ensure your Azure AI Foundry account has access to **Claude Sonnet 4.6** (`claude-sonnet-4-6`) in your deployment region. See the [Deployment Guide — Quota Check](./docs/DeploymentGuide.md#14-claude-model-quota-check) for verification steps.
-
-### Quick Start (Docker Compose)
-
-The fastest way to get running locally:
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/amitmukh/prior-auth-maf.git
-cd prior-auth-maf
-
-# 2. Configure credentials
-cp backend/.env.example backend/.env
-# Edit backend/.env with your Azure AI Foundry API key and endpoint
-
-# 3. Build and start
-docker compose up --build
-
-# App available at http://localhost:3000
-```
-
-> 📖 See the **[Deployment Guide](./docs/DeploymentGuide.md)** for all deployment options including local development setup and Azure Container Apps cloud deployment.
-
-<details>
-  <summary><b>Environment variables reference</b></summary>
-
-  | Variable | Required | Default | Description |
-  |----------|----------|---------|-------------|
-  | `AZURE_FOUNDRY_API_KEY` | Yes | — | Microsoft AI Foundry API key |
-  | `AZURE_FOUNDRY_ENDPOINT` | Yes | — | Foundry endpoint URL |
-  | `CLAUDE_MODEL` | No | `claude-sonnet-4-6` | Claude model identifier |
-  | `USE_SKILLS` | No | `true` | Enable skills-based agent architecture |
-  | `APPLICATION_INSIGHTS_CONNECTION_STRING` | No | — | Azure App Insights connection string |
-  | `MCP_NPI_REGISTRY` | No | `https://mcp.deepsense.ai/npi_registry/mcp` | NPI Registry MCP (DeepSense) |
-  | `MCP_ICD10_CODES` | No | `https://mcp.deepsense.ai/icd10_codes/mcp` | ICD-10 Codes MCP (DeepSense) |
-  | `MCP_CMS_COVERAGE` | No | `https://mcp.deepsense.ai/cms_coverage/mcp` | CMS Coverage MCP (DeepSense) |
-  | `MCP_CLINICAL_TRIALS` | No | `https://mcp.deepsense.ai/clinical_trials/mcp` | Clinical Trials MCP (DeepSense) |
-  | `MCP_PUBMED` | No | `https://pubmed.mcp.claude.com/mcp` | PubMed MCP (Anthropic) |
-
-</details>
-
----
-
 ## <img src="./docs/images/readme/supporting-documentation.svg" width="48" /> Supporting documentation
 
 | Document | Description |
@@ -275,6 +283,23 @@ docker compose up --build
 | [Technical Notes](./docs/technical-notes.md) | Windows SDK patches, MCP header injection, structured output, prompt caching, observability, Foundry agent registration, known limitations |
 | [Troubleshooting](./docs/troubleshooting.md) | Common issues and fixes — CLI failures, empty responses, connection errors, truncated responses, Foundry trace issues |
 | [Production Migration](./docs/production-migration.md) | PostgreSQL schema, Azure Blob Storage layout, migration steps, environment variables, what not to change |
+
+### Customization areas
+
+This solution accelerator is designed to be extended:
+
+| Area | What to customize | Guide |
+|------|-------------------|-------|
+| **Data persistence** | Replace in-memory store with PostgreSQL / Cosmos DB | [Production Migration](./docs/production-migration.md) |
+| **Authentication** | Add identity management and RBAC | Custom implementation |
+| **Payer-specific policies** | Extend with commercial and MA plan rules | [Extending](./docs/extending.md) |
+| **EHR/EMR integration** | Connect via FHIR or HL7 interfaces | Custom implementation |
+| **New agents** | Add Pharmacy Benefits, Financial Review, etc. | [Extending](./docs/extending.md) |
+| **New MCP servers** | Add CPT validator, drug formulary, etc. | [Extending](./docs/extending.md) |
+| **Decision rubric** | Switch from LENIENT to STRICT mode | [Extending](./docs/extending.md) |
+| **Notification letters** | Match your organization's letterhead format | [Extending](./docs/extending.md) |
+| **Compliance & security** | HIPAA-compliant infrastructure, encryption | Custom implementation |
+| **Scalability** | Azure Container Apps, Kubernetes | [Deployment Guide](./docs/DeploymentGuide.md) |
 
 ### Project structure
 
@@ -329,7 +354,7 @@ prior-auth-maf/
 │   └── lib/
 │       ├── api.ts                        # Backend API client
 │       ├── types.ts                      # TypeScript types
-│       └── sample-case.ts                # Demo case data
+│       └── sample-case.ts               # Demo case data
 │
 ├── docs/                                 # Supporting documentation
 ├── docker-compose.yml                    # Two-container local dev
@@ -338,24 +363,9 @@ prior-auth-maf/
 
 ---
 
-## Customization areas
+## Provide feedback
 
-This solution accelerator is designed to be extended:
-
-| Area | What to customize | Guide |
-|------|-------------------|-------|
-| **Data persistence** | Replace in-memory store with PostgreSQL / Cosmos DB | [Production Migration](./docs/production-migration.md) |
-| **Authentication** | Add identity management and RBAC | Custom implementation |
-| **Payer-specific policies** | Extend with commercial and MA plan rules | [Extending](./docs/extending.md) |
-| **EHR/EMR integration** | Connect via FHIR or HL7 interfaces | Custom implementation |
-| **New agents** | Add Pharmacy Benefits, Financial Review, etc. | [Extending](./docs/extending.md) |
-| **New MCP servers** | Add CPT validator, drug formulary, etc. | [Extending](./docs/extending.md) |
-| **Decision rubric** | Switch from LENIENT to STRICT mode | [Extending](./docs/extending.md) |
-| **Notification letters** | Match your organization's letterhead format | [Extending](./docs/extending.md) |
-| **Compliance & security** | HIPAA-compliant infrastructure, encryption | Custom implementation |
-| **Scalability** | Azure Container Apps, Kubernetes | [Quick Deploy](#quick-deploy) |
-
----
+Have questions, find a bug, or want to request a feature? [Submit a new issue](https://github.com/amitmukh/prior-auth-maf/issues) on this repo and we'll connect.
 
 ## Responsible AI Transparency FAQ
 Please refer to [Transparency FAQ](./docs/TRANSPARENCY_FAQ.md) for responsible AI transparency details of this solution accelerator.
