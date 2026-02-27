@@ -2,7 +2,7 @@
 
 A **multi-agent** AI-assisted prior authorization (PA) review application built
 with the **Microsoft Agent Framework**, **Claude Agent SDK**, and **Anthropic
-Healthcare MCP Servers**. Three specialized agents — Compliance, Clinical
+& DeepSense Healthcare MCP Servers**. Three specialized agents — Compliance, Clinical
 Reviewer, and Coverage — work in parallel and sequence, coordinated by an
 orchestrator that applies a gate-based decision rubric and produces a final
 recommendation with confidence scoring and an audit justification document.
@@ -36,8 +36,8 @@ confidence scoring, progressive gate evaluation, and structured audit trails.
 ## <img src="./docs/images/readme/solution-overview.svg" width="48" /> Solution overview
 
 This solution leverages **Microsoft AI Foundry**, **Microsoft Agent Framework**,
-**Claude Agent SDK**, **Azure Application Insights**, and **Anthropic Healthcare
-MCP Servers** to create an intelligent prior authorization review pipeline where
+**Claude Agent SDK**, **Azure Application Insights**, and **Anthropic &
+DeepSense Healthcare MCP Servers** to create an intelligent prior authorization review pipeline where
 specialized AI agents work together to validate, assess, and synthesize PA
 decisions with full audit transparency.
 
@@ -75,7 +75,7 @@ The orchestrator coordinates four phases with three specialized agents:
 <details>
   <summary><b>MCP-powered data access</b></summary>
 
-  - Five remote MCP servers: NPI Registry, ICD-10 Codes, CMS Coverage, PubMed, Clinical Trials
+  - Five remote MCP servers: NPI Registry, ICD-10 Codes, CMS Coverage, Clinical Trials (DeepSense), PubMed (Anthropic)
   - No custom MCP client needed — Microsoft Agent Framework's Claude SDK handles it natively
   - Model-agnostic: `MCPStreamableHTTPTool` enables MCP access from any LLM
 </details>
@@ -235,7 +235,7 @@ Edit `.env` and set your Microsoft AI Foundry credentials:
 ```env
 AZURE_FOUNDRY_API_KEY=your-azure-foundry-api-key
 AZURE_FOUNDRY_ENDPOINT=https://your-endpoint.services.ai.azure.com
-CLAUDE_MODEL=claude-sonnet-4-20250514
+CLAUDE_MODEL=claude-sonnet-4-6
 
 # Skills-based approach (default: true)
 USE_SKILLS=true
@@ -244,8 +244,10 @@ USE_SKILLS=true
 APPLICATION_INSIGHTS_CONNECTION_STRING=InstrumentationKey=...;IngestionEndpoint=...
 ```
 
-The MCP server endpoints are pre-configured with defaults from the
-[anthropics/healthcare](https://github.com/anthropics/healthcare) marketplace.
+The MCP server endpoints are pre-configured with defaults:
+four [DeepSense](https://mcp.deepsense.ai) servers (NPI Registry, ICD-10 Codes,
+CMS Coverage, Clinical Trials) and one
+[Anthropic](https://github.com/anthropics/healthcare) server (PubMed).
 
 ### 3. Frontend setup
 
