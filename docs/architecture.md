@@ -403,3 +403,76 @@ The application supports two modes, controlled by the `USE_SKILLS` environment v
 | Parallelism | Multi-agent, concurrent | Multi-agent, concurrent | Single agent, sequential |
 | Platform | Microsoft AI Foundry via MAF | Microsoft AI Foundry via MAF | Claude Code with Skills API |
 | Confidence formula | Explicit weighted (4 components) | Explicit weighted (4 components) | Subjective assessment |
+
+---
+
+## Project Structure
+
+```
+prior-auth-maf/
+├── backend/
+│   ├── .env                              # Environment config (not committed)
+│   ├── requirements.txt                  # Python dependencies
+│   ├── run.py                            # Dev server launcher
+│   ├── .claude/
+│   │   ├── skills/
+│   │   │   ├── compliance-review/SKILL.md
+│   │   │   ├── clinical-review/SKILL.md
+│   │   │   ├── coverage-assessment/SKILL.md
+│   │   │   └── synthesis-decision/SKILL.md
+│   │   └── references/
+│   │       ├── rubric.md                 # Decision policy rubric
+│   │       └── output-formats.md         # JSON output schemas
+│   └── app/
+│       ├── main.py                       # FastAPI app, CORS, router mounts
+│       ├── config.py                     # Settings (API keys, MCP endpoints)
+│       ├── observability.py              # Azure App Insights + OpenTelemetry
+│       ├── patches/
+│       │   └── __init__.py               # Windows Claude SDK patches
+│       ├── agents/
+│       │   ├── compliance_agent.py       # Compliance Agent (no tools)
+│       │   ├── clinical_agent.py         # Clinical Reviewer Agent (3 MCP servers)
+│       │   ├── coverage_agent.py         # Coverage Agent (2 MCP servers)
+│       │   └── orchestrator.py           # Multi-agent coordinator + synthesis
+│       ├── services/
+│       │   ├── audit_pdf.py              # Audit justification PDF (fpdf2)
+│       │   ├── cpt_validation.py         # CPT/HCPCS format validation
+│       │   └── notification.py           # Notification letters + PDF
+│       ├── tools/
+│       │   └── mcp_config.py             # MCP server configs + headers
+│       ├── models/
+│       │   └── schemas.py                # Pydantic models
+│       └── routers/
+│           ├── review.py                 # POST /api/review + SSE streaming
+│           └── decision.py               # POST /api/decision
+│
+├── frontend/
+│   ├── package.json                      # Next.js 16 + shadcn/ui + Tailwind
+│   ├── app/
+│   │   └── page.tsx                      # Main page (form + dashboard)
+│   ├── components/
+│   │   ├── upload-form.tsx               # PA request form + sample case
+│   │   ├── progress-tracker.tsx          # Real-time agent progress
+│   │   ├── review-dashboard.tsx          # Results + confidence + gaps
+│   │   ├── agent-details.tsx             # Tabbed per-agent breakdown
+│   │   └── decision-panel.tsx            # Accept/Override + PDF download
+│   └── lib/
+│       ├── api.ts                        # Backend API client
+│       ├── types.ts                      # TypeScript types
+│       └── sample-case.ts               # Demo case data
+│
+├── .devcontainer/                        # Dev Container + setupEnv.sh
+├── .github/                              # Issue & PR templates, workflows, dependabot
+├── docs/                                 # Supporting documentation
+├── infra/                                # Azure Bicep IaC modules + VS Code Web scaffolding
+├── azure.yaml                            # Azure Developer CLI project
+├── docker-compose.yml                    # Two-container local dev
+├── next-steps.md                         # Post azd-init guidance
+├── CODE_OF_CONDUCT.md                    # Microsoft Open Source CoC
+├── CONTRIBUTING.md                       # Contribution guidelines
+├── LICENSE                               # MIT License
+├── SECURITY.md                           # Security reporting
+├── SUPPORT.md                            # Support guidelines
+├── TRANSPARENCY_FAQ.md                   # Responsible AI FAQ
+└── README.md                             # Project overview
+```
