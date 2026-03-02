@@ -42,9 +42,9 @@ Ensure you have access to an [Azure subscription](https://azure.microsoft.com/fr
 | [Azure Container Registry](https://learn.microsoft.com/en-us/azure/container-registry/) | Storing Docker images | [Pricing](https://azure.microsoft.com/en-us/pricing/details/container-registry/) |
 | [Azure Application Insights](https://learn.microsoft.com/en-us/azure/azure-monitor/app/app-insights-overview) | Observability and tracing (optional) | [Pricing](https://azure.microsoft.com/en-us/pricing/details/monitor/) |
 
-**Recommended Regions:** East US, East US 2, West US 2, West Europe, Sweden Central
+**Supported Regions:** Claude models on Microsoft Foundry are currently available only in **East US 2** and **Sweden Central**. You must deploy to one of these regions.
 
-🔍 **Check Availability:** Use [Azure Products by Region](https://azure.microsoft.com/en-us/explore/global-infrastructure/products-by-region/) to verify service availability in your chosen region.
+🔍 **Check Availability:** See [Use Foundry Models Claude](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/how-to/use-foundry-models-claude) for the latest region availability.
 
 ### 1.3 Claude Model Quota Check (Optional)
 
@@ -249,7 +249,7 @@ azd up
 **During deployment, you'll be prompted for:**
 1. **Environment name** (e.g., `prior-auth-dev`)
 2. **Azure subscription** selection
-3. **Azure region** (e.g., `eastus`) — select a region with available Claude model quota
+3. **Azure region** — select **East US 2** (`eastus2`) or **Sweden Central** (`swedencentral`)
 4. **Azure Foundry API key** and **endpoint** — from Step 1.3
 
 **What gets deployed:**
@@ -264,7 +264,7 @@ azd up
 
 **Expected Duration:** ~10 minutes for initial provisioning + deployment.
 
-**⚠️ Deployment Issues:** If you encounter errors or timeouts, try a different region as there may be capacity constraints. For detailed error solutions, see our [Troubleshooting Guide](./troubleshooting.md).
+**⚠️ Deployment Issues:** If you encounter errors or timeouts, try the other supported region (East US 2 or Sweden Central) as there may be capacity constraints. For detailed error solutions, see our [Troubleshooting Guide](./troubleshooting.md).
 
 ### 4.3 Get Application URL
 
@@ -344,7 +344,7 @@ If deployment fails or you need to clean up manually:
 
 **If your deployment failed or encountered errors:**
 
-1. **Try a different region:** Create a new environment and select a different Azure region during deployment
+1. **Try the other supported region:** Create a new environment and select **East US 2** or **Sweden Central** during deployment
 2. **Clean up and retry:** Use `azd down` to remove failed resources, then `azd up` to redeploy
 3. **Check troubleshooting:** Review [Troubleshooting Guide](./troubleshooting.md) for specific error solutions
 4. **Fresh start:** Create a completely new environment with a different name
@@ -415,7 +415,7 @@ azd env get-values
 ### Best Practices for Multiple Environments
 
 - **Use descriptive names:** `priorauthdev`, `priorauthprod`, `priorauthtest`
-- **Different regions:** Deploy to multiple regions for testing quota availability
+- **Different regions:** Deploy to East US 2 or Sweden Central for testing quota availability
 - **Separate configurations:** Each environment can have different parameter settings
 - **Clean up unused environments:** Use `azd down` to remove environments you no longer need
 
