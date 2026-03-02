@@ -1,1 +1,1 @@
-# VS Code for the Web - Azure AI Foundry Templates
+# VS Code for the Web - Microsoft Foundry Templates

@@ -41,7 +41,7 @@ confidence scoring, progressive gate evaluation, and structured audit trails.
 
 ## <img src="./docs/images/readme/solution-overview.svg" width="48" /> Solution overview
 
-This solution leverages **Microsoft AI Foundry**, **Microsoft Agent Framework**,
+This solution leverages **Microsoft Foundry**, **Microsoft Agent Framework**,
 **Claude Agent SDK**, **Azure Application Insights**, and **Anthropic &
 DeepSense Healthcare MCP Servers** to create an intelligent prior authorization review pipeline where
 specialized AI agents work together to validate, assess, and synthesize PA
@@ -67,7 +67,7 @@ The orchestrator coordinates four phases with three specialized agents:
 - [Prior Auth Review Skill](https://github.com/anthropics/healthcare/tree/main/prior-auth-review-skill)
 - [Build AI Agents with Claude Agent SDK and Microsoft Agent Framework](https://devblogs.microsoft.com/semantic-kernel/build-ai-agents-with-claude-agent-sdk-and-microsoft-agent-framework/)
 - [Microsoft Agent Framework — Claude Agent](https://learn.microsoft.com/en-us/agent-framework/user-guide/agents/agent-types/anthropic-agent)
-- [Microsoft AI Foundry Claude Models](https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-models/how-to/use-foundry-models-claude)
+- [Microsoft Foundry Claude Models](https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-models/how-to/use-foundry-models-claude)
 - [Claude Prior Auth Review Tutorial](https://claude.com/resources/tutorials/how-to-use-the-prior-auth-review-sample-skill-with-claude-2ggy8)
 - [Model Context Protocol (MCP)](https://modelcontextprotocol.io/)
 - [Claude Agent SDK](https://platform.claude.com/docs/en/agent-sdk/overview)
@@ -161,22 +161,20 @@ Follow the quick deploy steps on the deployment guide to deploy this solution to
 | [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/amitmukh/prior-auth-maf) | [![Open in Dev Containers](https://img.shields.io/static/v1?style=for-the-badge&label=Dev%20Containers&message=Open&color=blue&logo=visualstudiocode)](https://vscode.dev/redirect?url=vscode://ms-vscode-remote.remote-containers/cloneInVolume?url=https://github.com/amitmukh/prior-auth-maf) | [![Open in Visual Studio Code Web](https://img.shields.io/static/v1?style=for-the-badge&label=Visual%20Studio%20Code%20(Web)&message=Open&color=blue&logo=visualstudiocode&logoColor=white)](https://vscode.dev/azure/?vscode-azure-exp=foundry&agentPayload=eyJiYXNlVXJsIjogImh0dHBzOi8vcmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbS9hbWl0bXVraC9wcmlvci1hdXRoLW1hZi9yZWZzL2hlYWRzL21haW4vaW5mcmEvdnNjb2RlX3dlYiIsICJpbmRleFVybCI6ICIvaW5kZXguanNvbiIsICJ2YXJpYWJsZXMiOiB7ImFnZW50SWQiOiAiIiwgImNvbm5lY3Rpb25TdHJpbmciOiAiIiwgInRocmVhZElkIjogIiIsICJ1c2VyTWVzc2FnZSI6ICIiLCAicGxheWdyb3VuZE5hbWUiOiAiIiwgImxvY2F0aW9uIjogIiIsICJzdWJzY3JpcHRpb25JZCI6ICIiLCAicmVzb3VyY2VJZCI6ICIiLCAicHJvamVjdFJlc291cmNlSWQiOiAiIiwgImVuZHBvaW50IjogIiJ9LCAiY29kZVJvdXRlIjogWyJhaS1wcm9qZWN0cy1zZGsiLCAicHl0aG9uIiwgImRlZmF1bHQtYXp1cmUtYXV0aCIsICJlbmRwb2ludCJdfQ==) |
 |---|---|---|
 
-> ⚠️ **Important: Check Azure AI Foundry Quota Availability**
+> ⚠️ **Important: Check Microsoft Foundry Quota Availability**
 > <br/>To ensure sufficient quota is available in your subscription, please follow the [quota check instructions](./docs/DeploymentGuide.md#14-claude-model-quota-check) before you deploy the solution.
 
 ### Prerequisites & Costs
 
-To deploy this solution accelerator, ensure you have access to an [Azure subscription](https://azure.microsoft.com/free/) with the necessary permissions to create resource groups and resources.
+To deploy this solution accelerator, ensure you have access to an [Azure subscription](https://azure.microsoft.com/free/) with the necessary permissions to create resource groups and resources. You also need a [Microsoft Foundry](https://learn.microsoft.com/en-us/azure/ai-foundry/) resource with access to **Claude models** via [Foundry Models](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/how-to/use-foundry-models-claude).
 
-Check the [Azure Products by Region](https://azure.microsoft.com/en-us/explore/global-infrastructure/products-by-region/) page and select a region where the following services are available: Azure AI Foundry, Azure Container Apps, and Azure Container Registry.
-
-Recommended regions: East US, East US 2, West US 2, West Europe, Sweden Central.
+> ⚠️ **Region requirement:** Claude models on Microsoft Foundry are currently available only in **East US 2** and **Sweden Central**. You must deploy to one of these regions. See [Use Foundry Models Claude](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/how-to/use-foundry-models-claude) for the latest region availability.
 
 Pricing varies per region and usage, so it isn't possible to predict exact costs for your usage. The majority of the Azure resources used in this infrastructure are on usage-based pricing tiers. Use the [Azure pricing calculator](https://azure.microsoft.com/en-us/pricing/calculator) to estimate costs for your subscription.
 
 | Azure Service | Purpose | Pricing |
 |--------------|---------|---------|
-| [Azure AI Foundry](https://azure.microsoft.com/en-us/pricing/details/ai-foundry/) | Claude Sonnet 4.6 model inference | [Pricing](https://azure.microsoft.com/en-us/pricing/details/ai-foundry/) |
+| [Microsoft Foundry](https://azure.microsoft.com/en-us/pricing/details/ai-foundry/) | Claude Sonnet 4.6 model inference | [Pricing](https://azure.microsoft.com/en-us/pricing/details/ai-foundry/) |
 | [Azure Container Apps](https://azure.microsoft.com/en-us/pricing/details/container-apps/) | Backend + frontend hosting | [Pricing](https://azure.microsoft.com/en-us/pricing/details/container-apps/) |
 | [Azure Container Registry](https://azure.microsoft.com/en-us/pricing/details/container-registry/) | Docker image storage | [Pricing](https://azure.microsoft.com/en-us/pricing/details/container-registry/) |
 | [Azure Application Insights](https://azure.microsoft.com/en-us/pricing/details/monitor/) | Observability and tracing (optional) | [Pricing](https://azure.microsoft.com/en-us/pricing/details/monitor/) |

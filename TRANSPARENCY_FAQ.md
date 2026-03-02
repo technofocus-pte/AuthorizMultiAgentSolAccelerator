@@ -47,7 +47,7 @@
     - **Decision rubric evaluation:** Verified gate-based logic against sample cases covering approve, pend, and override scenarios, including edge cases with missing documentation and invalid codes.
     - **Confidence scoring calibration:** Assessed that per-criterion confidence scores and the weighted composite confidence score produce reasonable values across diverse clinical scenarios.
 
-    Users and organizations adopting this accelerator should conduct their own evaluations aligned with their specific clinical workflows, payer policies, and regulatory requirements. Microsoft AI Foundry provides evaluation tools that can be leveraged for this purpose.
+    Users and organizations adopting this accelerator should conduct their own evaluations aligned with their specific clinical workflows, payer policies, and regulatory requirements. Microsoft Foundry provides evaluation tools that can be leveraged for this purpose.
 
 - ### What are the limitations of the Prior Authorization Review — Multi-Agent Solution Accelerator? How can users minimize the impact of these limitations when using the system?
 

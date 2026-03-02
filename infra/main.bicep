@@ -17,11 +17,11 @@ param environmentName string
 @description('Primary location for all resources')
 param location string
 
-@description('Azure AI Foundry API key for Claude model access')
+@description('Microsoft Foundry API key for Claude model access')
 @secure()
 param azureFoundryApiKey string = ''
 
-@description('Azure AI Foundry endpoint URL')
+@description('Microsoft Foundry endpoint URL')
 param azureFoundryEndpoint string = ''
 
 @description('Application Insights connection string (optional)')

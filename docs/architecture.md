@@ -74,7 +74,7 @@
 │  │  In-memory review store for persistence                 │  │
 │  └────────────────────────────────────────────────────────┘  │
 │                                                              │
-│  Microsoft AI Foundry (Claude model endpoint + API key)      │
+│  Microsoft Foundry (Claude model endpoint + API key)         │
 └──────────────────────┬───────────────────────────────────────┘
                        │  Streamable HTTP (MCP protocol)
                        │  Header: User-Agent: claude-code/1.0
@@ -401,7 +401,7 @@ The application supports two modes, controlled by the `USE_SKILLS` environment v
 | Agent configuration | SKILL.md files via MAF discovery | Inline system instructions | SKILL.md via Claude Code Skills API |
 | Token efficiency | Progressive disclosure | Full prompt (~1,200-1,500 tokens per agent) | Progressive disclosure per subskill |
 | Parallelism | Multi-agent, concurrent | Multi-agent, concurrent | Single agent, sequential |
-| Platform | Microsoft AI Foundry via MAF | Microsoft AI Foundry via MAF | Claude Code with Skills API |
+| Platform | Microsoft Foundry via MAF | Microsoft Foundry via MAF | Claude Code with Skills API |
 | Confidence formula | Explicit weighted (4 components) | Explicit weighted (4 components) | Subjective assessment |
 
 ---

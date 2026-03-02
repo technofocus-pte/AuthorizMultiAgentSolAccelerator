@@ -37,7 +37,7 @@ Ensure you have access to an [Azure subscription](https://azure.microsoft.com/fr
 
 | **Service** | **Purpose** | **Pricing** |
 |-------------|-------------|-------------|
-| [Azure AI Foundry](https://learn.microsoft.com/en-us/azure/ai-foundry/) | Claude Sonnet 4.6 model inference | [Pricing](https://azure.microsoft.com/en-us/pricing/details/ai-foundry/) |
+| [Microsoft Foundry](https://learn.microsoft.com/en-us/azure/ai-foundry/) | Claude Sonnet 4.6 model inference | [Pricing](https://azure.microsoft.com/en-us/pricing/details/ai-foundry/) |
 | [Azure Container Apps](https://learn.microsoft.com/en-us/azure/container-apps/) | Hosting backend and frontend containers | [Pricing](https://azure.microsoft.com/en-us/pricing/details/container-apps/) |
 | [Azure Container Registry](https://learn.microsoft.com/en-us/azure/container-registry/) | Storing Docker images | [Pricing](https://azure.microsoft.com/en-us/pricing/details/container-registry/) |
 | [Azure Application Insights](https://learn.microsoft.com/en-us/azure/azure-monitor/app/app-insights-overview) | Observability and tracing (optional) | [Pricing](https://azure.microsoft.com/en-us/pricing/details/monitor/) |
@@ -48,11 +48,11 @@ Ensure you have access to an [Azure subscription](https://azure.microsoft.com/fr
 
 ### 1.3 Claude Model Quota Check (Optional)
 
-💡 **RECOMMENDED:** Verify that your Azure AI Foundry account has access to Claude Sonnet 4.6 before deployment.
+💡 **RECOMMENDED:** Verify that your Microsoft Foundry account has access to Claude Sonnet 4.6 before deployment.
 
 **Steps to verify:**
 
-1. Go to [Azure AI Foundry](https://ai.azure.com/)
+1. Go to [Microsoft Foundry](https://ai.azure.com/)
 2. Navigate to your project → **Model catalog**
 3. Search for **Claude Sonnet 4.6** (model ID: `claude-sonnet-4-6`)
 4. Verify the model is available in your selected region
@@ -60,7 +60,7 @@ Ensure you have access to an [Azure subscription](https://azure.microsoft.com/fr
 
 > **Note:** When you run `azd up`, the deployment will prompt you for these credentials, so this pre-check is optional but helpful for planning purposes.
 
-📖 **Learn More:** See [Microsoft AI Foundry Claude Models](https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-models/how-to/use-foundry-models-claude) for setup instructions.
+📖 **Learn More:** See [Microsoft Foundry Claude Models](https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-models/how-to/use-foundry-models-claude) for setup instructions.
 
 ---
 
@@ -171,7 +171,7 @@ Review the configuration options below. You can customize any settings that meet
 
 ### 3.1 Set Environment Variables
 
-Create a `backend/.env` file with your Microsoft AI Foundry credentials:
+Create a `backend/.env` file with your Microsoft Foundry credentials:
 
 ```env
 AZURE_FOUNDRY_API_KEY=your-azure-foundry-api-key
@@ -445,7 +445,7 @@ The `docker-compose.yml` reads your `backend/.env` file and maps credentials:
 
 | **Your `.env` variable** | **Maps to (container)** | **Purpose** |
 |--------------------------|-------------------------|-------------|
-| `AZURE_FOUNDRY_API_KEY` | `ANTHROPIC_FOUNDRY_API_KEY` | Microsoft AI Foundry auth |
+| `AZURE_FOUNDRY_API_KEY` | `ANTHROPIC_FOUNDRY_API_KEY` | Microsoft Foundry auth |
 | `AZURE_FOUNDRY_ENDPOINT` | `ANTHROPIC_FOUNDRY_BASE_URL` | Foundry endpoint URL |
 | (set automatically) | `CLAUDE_CODE_USE_FOUNDRY=true` | Enables Foundry mode |
 
@@ -658,7 +658,7 @@ az group delete --name prior-auth-rg --yes --no-wait
 | MCP server timeouts | Network/firewall blocking MCP endpoints | Verify outbound HTTPS access to `mcp.deepsense.ai` and `pubmed.mcp.claude.com` |
 | Frontend shows CORS error | `FRONTEND_ORIGIN` mismatch | Set `FRONTEND_ORIGIN` to match the frontend's URL |
 | Container build fails | Docker not running | Start Docker Desktop and retry |
-| Azure quota exceeded | Insufficient Claude model quota | Check quota in Azure AI Foundry (see Step 1.3) |
+| Azure quota exceeded | Insufficient Claude model quota | Check quota in Microsoft Foundry (see Step 1.3) |
 | Agent reviews take >5 min | Claude model capacity limits | Retry during off-peak hours or check Foundry service status |
 
 > 📖 **Detailed Troubleshooting:** See [Troubleshooting Guide](./troubleshooting.md) for comprehensive solutions.

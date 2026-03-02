@@ -22,7 +22,7 @@ When running inside a Claude Code editor session, the environment inherits
 invalid local-proxy credentials.
 
 **Fix:** Overrides `ANTHROPIC_API_KEY` and `ANTHROPIC_BASE_URL` with the
-real Microsoft AI Foundry credentials, and sets Foundry-specific env vars.
+real Microsoft Foundry credentials, and sets Foundry-specific env vars.
 
 ### Patch 3 — Model Mapping
 

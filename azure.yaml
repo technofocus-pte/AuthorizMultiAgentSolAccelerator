@@ -65,7 +65,7 @@ hooks:
         Write-Host "===============================================================" -ForegroundColor Yellow
         Write-Host ""
         Write-Host " Before using the application, ensure you have:" -ForegroundColor White
-        Write-Host "  1. Deployed a Claude model in Azure AI Foundry" -ForegroundColor White
+        Write-Host "  1. Deployed a Claude model in Microsoft Foundry" -ForegroundColor White
         Write-Host "  2. Set AZURE_FOUNDRY_API_KEY and AZURE_FOUNDRY_ENDPOINT" -ForegroundColor White
         Write-Host "     in the backend Container App environment variables" -ForegroundColor White
         Write-Host ""
@@ -116,7 +116,7 @@ hooks:
         printf "${Green} DEPLOYMENT COMPLETE\n"
         printf "${Yellow}===============================================================${NC}\n\n"
         printf " Before using the application, ensure you have:\n"
-        printf "  1. Deployed a Claude model in Azure AI Foundry\n"
+        printf "  1. Deployed a Claude model in Microsoft Foundry\n"
         printf "  2. Set AZURE_FOUNDRY_API_KEY and AZURE_FOUNDRY_ENDPOINT\n"
         printf "     in the backend Container App environment variables\n\n"
         FRONTEND_URL=$(azd env get-value frontendUrl)
