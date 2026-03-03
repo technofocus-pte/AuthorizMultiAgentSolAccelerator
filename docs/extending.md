@@ -305,3 +305,71 @@ mcp_tool = MCPStreamableHTTPTool(name="npi", url=NPI_URL, http_client=http_clien
 async with mcp_tool:
     result = await mcp_tool.session.call_tool("npi_validate", {"npi": "1234567893"})
 ```
+
+---
+
+## Future Enhancement: Azure AI Search for Policy RAG
+
+The current system retrieves coverage policies at runtime via the **CMS Coverage MCP server**, which provides Medicare LCDs and NCDs. This works well for Medicare cases but has limitations — the Synthesis agent already flags this with a disclaimer:
+
+> *"Coverage policies reflect Medicare LCDs/NCDs only. If this review is for a commercial or Medicare Advantage plan, payer-specific policies may differ."*
+
+**Azure AI Search** with vector indexing could significantly enhance the system by enabling semantic retrieval over a broader set of policy documents. Below are the opportunities, organized by which agent would benefit.
+
+### Where AI Search Adds Value
+
+| Agent | Index Content | What It Enables |
+|-------|--------------|-----------------|
+| **Coverage Agent** | Commercial payer PA policies (UHC, Aetna, BCBS, Cigna, etc.) | Payer-specific coverage criteria instead of Medicare-only. E.g., "UHC requires 6 weeks of conservative therapy before approving spinal fusion." |
+| **Coverage Agent** | Medicare Advantage plan-specific supplements | Plan-level nuances beyond standard Medicare LCDs/NCDs |
+| **Clinical Agent** | Clinical practice guidelines (ACR Appropriateness Criteria, NCCN, AUA, etc.) | Evidence-based clinical reasoning beyond what PubMed MCP returns — structured guidelines rather than raw literature |
+| **Compliance Agent** | Organization-specific PA submission requirements | Internal checklists, required documentation templates, payer-specific form requirements |
+| **Synthesis Agent** | Historical PA decisions (vectorized) | Precedent-based reasoning — "95% of similar cases with this diagnosis and procedure were approved" |
+
+### How It Would Work
+
+Azure AI Search would be exposed as an **MCP tool** (or direct SDK call) that agents query during their review:
+
+```
+Coverage Agent prompt → "Search payer policies for CPT 22630 with UnitedHealthcare"
+                      → AI Search vector query → top-k relevant policy chunks
+                      → Agent reasons over retrieved policy text
+```
+
+Each index would use:
+- **Vector embeddings** (Azure OpenAI `text-embedding-3-large`) for semantic search
+- **Hybrid search** (vector + keyword) for policy ID lookups
+- **Metadata filters** (payer name, effective date, procedure category) for precision
+
+### What You Would Need
+
+| Requirement | Details |
+|-------------|---------|
+| **Policy documents** | PDFs or structured text from commercial payers. These are typically proprietary and obtained through payer contracts or provider portals. |
+| **Azure AI Search resource** | Standard tier or higher for vector search support |
+| **Embedding model** | An Azure OpenAI embedding deployment (e.g., `text-embedding-3-large`) in the same region |
+| **Ingestion pipeline** | Document chunking, embedding, and indexing — can use Azure AI Search's built-in [integrated vectorization](https://learn.microsoft.com/en-us/azure/search/vector-search-integrated-vectorization) or a custom pipeline |
+| **MCP server or tool wrapper** | Expose the search index as a tool the agents can call |
+
+### What It Does NOT Replace
+
+AI Search is a **retrieval** layer — it complements, not replaces, the existing MCP tools:
+
+| Data Source | Keep Using | Why |
+|-------------|-----------|-----|
+| CMS Coverage MCP | ✅ | Live, authoritative Medicare LCD/NCD data |
+| NPI Registry MCP | ✅ | Real-time provider verification |
+| ICD-10 MCP | ✅ | Code validation and lookup |
+| PubMed MCP | ✅ | Current medical literature |
+| Clinical Trials MCP | ✅ | Active trial matching |
+
+AI Search would add a **sixth data source** — payer policy documents — not replace the existing five.
+
+### Implementation Priority
+
+This enhancement is most valuable when:
+1. The system needs to handle **commercial payer** cases (not just Medicare)
+2. The organization has **access to payer policy documents** to index
+3. There is a need for **historical decision** consistency across reviewers
+
+Until policy documents are available for ingestion, the current CMS-only approach is appropriate for the demo scope.
