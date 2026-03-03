@@ -15,7 +15,11 @@ targetScope = 'subscription'
 param environmentName string
 
 @minLength(1)
-@description('Primary location for all resources')
+@description('Primary location for all resources. Must be East US 2 or Sweden Central for Claude model availability.')
+@allowed([
+  'eastus2'
+  'swedencentral'
+])
 param location string
 
 @description('Microsoft Foundry API key for Claude model access')
