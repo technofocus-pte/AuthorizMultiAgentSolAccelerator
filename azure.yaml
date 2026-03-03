@@ -9,7 +9,7 @@ hooks:
   preprovision:
     windows:
       run: |
-        # Validate region — Claude models only available in East US 2 and Sweden Central
+        # ── Region Validation ────────────────────────────────────────
         $region = azd env get-value AZURE_LOCATION 2>$null
         if ($region -and $region -notin @('eastus2', 'swedencentral')) {
           Write-Host ""
@@ -30,12 +30,158 @@ hooks:
           Write-Host ""
           exit 1
         }
+
+        # ── Pre-Deployment Quota & Provider Check ────────────────────
+        if ($region) {
+          Write-Host ""
+          Write-Host "===============================================================" -ForegroundColor Yellow
+          Write-Host " PRE-DEPLOYMENT VERIFICATION" -ForegroundColor Green
+          Write-Host "===============================================================" -ForegroundColor Yellow
+          Write-Host ""
+
+          $subId = az account show --query "id" -o tsv 2>$null
+          $subName = az account show --query "name" -o tsv 2>$null
+          Write-Host " Subscription: $subName" -ForegroundColor White
+          Write-Host " Region:       $region" -ForegroundColor White
+          Write-Host ""
+
+          # Check required resource providers
+          Write-Host " Checking resource providers..." -ForegroundColor White
+          $providers = @(
+            @{ Name = "Microsoft.App";                     Desc = "Container Apps" },
+            @{ Name = "Microsoft.ContainerRegistry";       Desc = "Container Registry" },
+            @{ Name = "Microsoft.MachineLearningServices"; Desc = "AI Foundry" },
+            @{ Name = "Microsoft.Storage";                 Desc = "Storage Account" },
+            @{ Name = "Microsoft.KeyVault";                Desc = "Key Vault" },
+            @{ Name = "Microsoft.OperationalInsights";     Desc = "Log Analytics" },
+            @{ Name = "Microsoft.Insights";                Desc = "Application Insights" }
+          )
+
+          $providerIssues = @()
+          foreach ($p in $providers) {
+            $state = az provider show -n $p.Name --query "registrationState" -o tsv 2>$null
+            if ($state -eq "Registered") {
+              Write-Host "   [OK] $($p.Desc) ($($p.Name))" -ForegroundColor Green
+            } else {
+              Write-Host "   [!!] $($p.Desc) ($($p.Name)) - $state" -ForegroundColor Red
+              $providerIssues += $p
+            }
+          }
+
+          # Auto-register unregistered providers
+          if ($providerIssues.Count -gt 0) {
+            Write-Host ""
+            Write-Host " Registering missing providers..." -ForegroundColor Yellow
+            foreach ($p in $providerIssues) {
+              Write-Host "   Registering $($p.Name)..." -ForegroundColor White -NoNewline
+              az provider register -n $p.Name --wait 2>$null
+              $state = az provider show -n $p.Name --query "registrationState" -o tsv 2>$null
+              if ($state -eq "Registered") {
+                Write-Host " OK" -ForegroundColor Green
+              } else {
+                Write-Host " FAILED ($state)" -ForegroundColor Red
+                Write-Host ""
+                Write-Host " ERROR: Cannot register $($p.Name)." -ForegroundColor Red
+                Write-Host " You may need 'Contributor' or 'Owner' role on the subscription." -ForegroundColor Yellow
+                Write-Host ""
+                exit 1
+              }
+            }
+          }
+
+          # Check Container Apps quota
+          Write-Host ""
+          Write-Host " Checking resource quotas..." -ForegroundColor White
+
+          $ErrorActionPreference = 'SilentlyContinue'
+          $caEnvUsage = az containerapp env list --query "length([?location=='$region'])" -o tsv 2>$null
+          $ErrorActionPreference = 'Continue'
+          if ($null -eq $caEnvUsage) { $caEnvUsage = 0 }
+          $caEnvLimit = 15
+          $caEnvRemaining = $caEnvLimit - [int]$caEnvUsage
+
+          # Check Container Registry quota
+          $ErrorActionPreference = 'SilentlyContinue'
+          $acrUsage = az acr list --query "length([?location=='$region'])" -o tsv 2>$null
+          $ErrorActionPreference = 'Continue'
+          if ($null -eq $acrUsage) { $acrUsage = 0 }
+
+          # Check ML Workspace (AI Foundry) quota
+          $ErrorActionPreference = 'SilentlyContinue'
+          $mlUsage = az ml workspace list --query "length([?location=='$region'])" -o tsv 2>$null
+          $ErrorActionPreference = 'Continue'
+          if ($null -eq $mlUsage) { $mlUsage = 0 }
+
+          # Display quota summary
+          Write-Host ""
+          Write-Host " Resource Quota Summary ($region):" -ForegroundColor Yellow
+          Write-Host " ┌────────────────────────────────┬────────┬────────┐" -ForegroundColor Gray
+          Write-Host " │ Resource                       │ In Use │ Status │" -ForegroundColor Gray
+          Write-Host " ├────────────────────────────────┼────────┼────────┤" -ForegroundColor Gray
+
+          # Container Apps Environments
+          if ($caEnvRemaining -gt 0) {
+            Write-Host " │ Container Apps Environments    │ $($caEnvUsage.ToString().PadLeft(6)) │  " -ForegroundColor Gray -NoNewline
+            Write-Host "OK" -ForegroundColor Green -NoNewline
+            Write-Host "  │" -ForegroundColor Gray
+          } else {
+            Write-Host " │ Container Apps Environments    │ $($caEnvUsage.ToString().PadLeft(6)) │ " -ForegroundColor Gray -NoNewline
+            Write-Host "FULL" -ForegroundColor Red -NoNewline
+            Write-Host " │" -ForegroundColor Gray
+          }
+
+          # Container Registries
+          Write-Host " │ Container Registries           │ $($acrUsage.ToString().PadLeft(6)) │  " -ForegroundColor Gray -NoNewline
+          Write-Host "OK" -ForegroundColor Green -NoNewline
+          Write-Host "  │" -ForegroundColor Gray
+
+          # AI Foundry Workspaces
+          Write-Host " │ AI Foundry Workspaces          │ $($mlUsage.ToString().PadLeft(6)) │  " -ForegroundColor Gray -NoNewline
+          Write-Host "OK" -ForegroundColor Green -NoNewline
+          Write-Host "  │" -ForegroundColor Gray
+
+          Write-Host " └────────────────────────────────┴────────┴────────┘" -ForegroundColor Gray
+
+          if ($caEnvRemaining -le 0) {
+            Write-Host ""
+            Write-Host " WARNING: Container Apps Environment quota may be exhausted!" -ForegroundColor Red
+            Write-Host " You have $caEnvUsage/$caEnvLimit environments in $region." -ForegroundColor Yellow
+            Write-Host " Delete unused environments or request a quota increase." -ForegroundColor Yellow
+            Write-Host " Azure Portal: https://portal.azure.com/#view/Microsoft_Azure_Capacity/QuotaMenuBlade" -ForegroundColor Gray
+            Write-Host ""
+          }
+
+          # Resources to be created
+          Write-Host ""
+          Write-Host " Resources to be created:" -ForegroundColor Yellow
+          Write-Host "   • Resource Group" -ForegroundColor White
+          Write-Host "   • AI Foundry Hub + Project (+ Storage Account, Key Vault)" -ForegroundColor White
+          Write-Host "   • Container Registry" -ForegroundColor White
+          Write-Host "   • Container Apps Environment" -ForegroundColor White
+          Write-Host "   • Backend Container App (Python/FastAPI)" -ForegroundColor White
+          Write-Host "   • Frontend Container App (Next.js/nginx)" -ForegroundColor White
+          Write-Host "   • Log Analytics + Application Insights" -ForegroundColor White
+          Write-Host ""
+          Write-Host "===============================================================" -ForegroundColor Yellow
+
+          # Ask for confirmation
+          $confirm = Read-Host " Proceed with deployment? (Y/n)"
+          if ($confirm -and $confirm -notin @('y', 'Y', 'yes', 'Yes', 'YES', '')) {
+            Write-Host ""
+            Write-Host " Deployment cancelled by user." -ForegroundColor Yellow
+            Write-Host ""
+            exit 1
+          }
+          Write-Host ""
+        }
+
         # Always provision with placeholder images; postprovision builds real ones
         azd env set IMAGES_BUILT false
       shell: pwsh
+      interactive: true
     posix:
       run: |
-        # Validate region — Claude models only available in East US 2 and Sweden Central
+        # ── Region Validation ────────────────────────────────────────
         REGION=$(azd env get-value AZURE_LOCATION 2>/dev/null)
         if [ -n "$REGION" ] && [ "$REGION" != "eastus2" ] && [ "$REGION" != "swedencentral" ]; then
           Red='\033[0;31m'
@@ -57,8 +203,120 @@ hooks:
           printf "${Gray} Learn more: https://learn.microsoft.com/en-us/azure/foundry/foundry-models/how-to/use-foundry-models-claude${NC}\n\n"
           exit 1
         fi
+
+        # ── Pre-Deployment Quota & Provider Check ────────────────────
+        if [ -n "$REGION" ]; then
+          Green='\033[0;32m'
+          Yellow='\033[1;33m'
+          Red='\033[0;31m'
+          White='\033[1;37m'
+          Cyan='\033[0;36m'
+          Gray='\033[0;90m'
+          NC='\033[0m'
+
+          printf "\n"
+          printf "${Yellow}===============================================================\n"
+          printf "${Green} PRE-DEPLOYMENT VERIFICATION\n"
+          printf "${Yellow}===============================================================${NC}\n\n"
+
+          SUB_ID=$(az account show --query "id" -o tsv 2>/dev/null)
+          SUB_NAME=$(az account show --query "name" -o tsv 2>/dev/null)
+          printf "${White} Subscription: %s${NC}\n" "$SUB_NAME"
+          printf "${White} Region:       %s${NC}\n\n" "$REGION"
+
+          # Check required resource providers
+          printf "${White} Checking resource providers...${NC}\n"
+          PROVIDER_FAILED=0
+          for PROVIDER_INFO in \
+            "Microsoft.App|Container Apps" \
+            "Microsoft.ContainerRegistry|Container Registry" \
+            "Microsoft.MachineLearningServices|AI Foundry" \
+            "Microsoft.Storage|Storage Account" \
+            "Microsoft.KeyVault|Key Vault" \
+            "Microsoft.OperationalInsights|Log Analytics" \
+            "Microsoft.Insights|Application Insights"; do
+
+            PNAME=$(echo "$PROVIDER_INFO" | cut -d'|' -f1)
+            PDESC=$(echo "$PROVIDER_INFO" | cut -d'|' -f2)
+            STATE=$(az provider show -n "$PNAME" --query "registrationState" -o tsv 2>/dev/null)
+
+            if [ "$STATE" = "Registered" ]; then
+              printf "${Green}   [OK] %s (%s)${NC}\n" "$PDESC" "$PNAME"
+            else
+              printf "${Red}   [!!] %s (%s) - %s${NC}\n" "$PDESC" "$PNAME" "$STATE"
+              printf "${Yellow}   Registering %s...${NC}" "$PNAME"
+              az provider register -n "$PNAME" --wait 2>/dev/null
+              STATE=$(az provider show -n "$PNAME" --query "registrationState" -o tsv 2>/dev/null)
+              if [ "$STATE" = "Registered" ]; then
+                printf "${Green} OK${NC}\n"
+              else
+                printf "${Red} FAILED (%s)${NC}\n" "$STATE"
+                printf "\n${Red} ERROR: Cannot register %s.${NC}\n" "$PNAME"
+                printf "${Yellow} You may need 'Contributor' or 'Owner' role on the subscription.${NC}\n\n"
+                PROVIDER_FAILED=1
+              fi
+            fi
+          done
+
+          if [ "$PROVIDER_FAILED" = "1" ]; then
+            exit 1
+          fi
+
+          # Check resource quotas
+          printf "\n${White} Checking resource quotas...${NC}\n"
+
+          CA_ENV_USAGE=$(az containerapp env list --query "length([?location=='$REGION'])" -o tsv 2>/dev/null || echo "0")
+          ACR_USAGE=$(az acr list --query "length([?location=='$REGION'])" -o tsv 2>/dev/null || echo "0")
+          ML_USAGE=$(az ml workspace list --query "length([?location=='$REGION'])" -o tsv 2>/dev/null || echo "0")
+          CA_ENV_LIMIT=15
+
+          # Display quota summary
+          printf "\n${Yellow} Resource Quota Summary (%s):${NC}\n" "$REGION"
+          printf "${Gray} ┌────────────────────────────────┬────────┬────────┐${NC}\n"
+          printf "${Gray} │ Resource                       │ In Use │ Status │${NC}\n"
+          printf "${Gray} ├────────────────────────────────┼────────┼────────┤${NC}\n"
+
+          CA_REMAINING=$((CA_ENV_LIMIT - CA_ENV_USAGE))
+          if [ "$CA_REMAINING" -gt 0 ]; then
+            printf "${Gray} │ Container Apps Environments    │ %6s │  ${Green}OK${Gray}  │${NC}\n" "$CA_ENV_USAGE"
+          else
+            printf "${Gray} │ Container Apps Environments    │ %6s │ ${Red}FULL${Gray} │${NC}\n" "$CA_ENV_USAGE"
+          fi
+          printf "${Gray} │ Container Registries           │ %6s │  ${Green}OK${Gray}  │${NC}\n" "$ACR_USAGE"
+          printf "${Gray} │ AI Foundry Workspaces          │ %6s │  ${Green}OK${Gray}  │${NC}\n" "$ML_USAGE"
+          printf "${Gray} └────────────────────────────────┴────────┴────────┘${NC}\n"
+
+          if [ "$CA_REMAINING" -le 0 ]; then
+            printf "\n${Red} WARNING: Container Apps Environment quota may be exhausted!${NC}\n"
+            printf "${Yellow} You have %s/%s environments in %s.${NC}\n" "$CA_ENV_USAGE" "$CA_ENV_LIMIT" "$REGION"
+            printf "${Yellow} Delete unused environments or request a quota increase.${NC}\n"
+            printf "${Gray} Azure Portal: https://portal.azure.com/#view/Microsoft_Azure_Capacity/QuotaMenuBlade${NC}\n\n"
+          fi
+
+          # Resources to be created
+          printf "\n${Yellow} Resources to be created:${NC}\n"
+          printf "   • Resource Group\n"
+          printf "   • AI Foundry Hub + Project (+ Storage Account, Key Vault)\n"
+          printf "   • Container Registry\n"
+          printf "   • Container Apps Environment\n"
+          printf "   • Backend Container App (Python/FastAPI)\n"
+          printf "   • Frontend Container App (Next.js/nginx)\n"
+          printf "   • Log Analytics + Application Insights\n"
+          printf "\n${Yellow}===============================================================${NC}\n"
+
+          # Ask for confirmation
+          printf " Proceed with deployment? (Y/n) "
+          read -r CONFIRM
+          if [ -n "$CONFIRM" ] && [ "$CONFIRM" != "y" ] && [ "$CONFIRM" != "Y" ] && [ "$CONFIRM" != "yes" ]; then
+            printf "\n${Yellow} Deployment cancelled by user.${NC}\n\n"
+            exit 1
+          fi
+          printf "\n"
+        fi
+
         azd env set IMAGES_BUILT false
       shell: sh
+      interactive: true
 
   postprovision:
     windows:
