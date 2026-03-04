@@ -459,9 +459,18 @@ hooks:
           # ── 7. Resource Quotas ───────────────────────────────
           printf "\n${White} [7/7] Checking resource quotas...${NC}\n"
 
-          CA_ENV_USAGE=$(az containerapp env list --query "length([?location=='$REGION'])" -o tsv 2>/dev/null || echo "0")
+          # Only check quotas if required CLI extensions are available
+          if az extension show --name containerapp >/dev/null 2>&1; then
+            CA_ENV_USAGE=$(az containerapp env list --query "length([?location=='$REGION'])" -o tsv 2>/dev/null || echo "0")
+          else
+            CA_ENV_USAGE="N/A"
+          fi
           ACR_USAGE=$(az acr list --query "length([?location=='$REGION'])" -o tsv 2>/dev/null || echo "0")
-          ML_USAGE=$(az ml workspace list --query "length([?location=='$REGION'])" -o tsv 2>/dev/null || echo "0")
+          if az extension show --name ml >/dev/null 2>&1; then
+            ML_USAGE=$(az ml workspace list --query "length([?location=='$REGION'])" -o tsv 2>/dev/null || echo "0")
+          else
+            ML_USAGE="N/A"
+          fi
           CA_ENV_LIMIT=15
 
           # Display quota summary
@@ -470,11 +479,16 @@ hooks:
           printf "${Gray} │ Resource                       │ In Use │ Status │${NC}\n"
           printf "${Gray} ├────────────────────────────────┼────────┼────────┤${NC}\n"
 
-          CA_REMAINING=$((CA_ENV_LIMIT - CA_ENV_USAGE))
-          if [ "$CA_REMAINING" -gt 0 ]; then
-            printf "${Gray} │ Container Apps Environments    │ %6s │  ${Green}OK${Gray}  │${NC}\n" "$CA_ENV_USAGE"
+          if [ "$CA_ENV_USAGE" = "N/A" ]; then
+            printf "${Gray} │ Container Apps Environments    │    N/A │ ${Yellow}SKIP${Gray} │${NC}\n"
+            CA_REMAINING=1  # assume OK
           else
-            printf "${Gray} │ Container Apps Environments    │ %6s │ ${Red}FULL${Gray} │${NC}\n" "$CA_ENV_USAGE"
+            CA_REMAINING=$((CA_ENV_LIMIT - CA_ENV_USAGE))
+            if [ "$CA_REMAINING" -gt 0 ]; then
+              printf "${Gray} │ Container Apps Environments    │ %6s │  ${Green}OK${Gray}  │${NC}\n" "$CA_ENV_USAGE"
+            else
+              printf "${Gray} │ Container Apps Environments    │ %6s │ ${Red}FULL${Gray} │${NC}\n" "$CA_ENV_USAGE"
+            fi
           fi
           printf "${Gray} │ Container Registries           │ %6s │  ${Green}OK${Gray}  │${NC}\n" "$ACR_USAGE"
           printf "${Gray} │ AI Foundry Workspaces          │ %6s │  ${Green}OK${Gray}  │${NC}\n" "$ML_USAGE"
