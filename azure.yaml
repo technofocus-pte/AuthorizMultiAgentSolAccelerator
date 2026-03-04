@@ -358,9 +358,9 @@ hooks:
 
           # ── 2. Role Assignment Check ─────────────────────────────
           printf "\n${White} [2/7] Checking permissions...${NC}\n"
-          USER_OID=$(az ad signed-in-user show --query "id" -o tsv 2>/dev/null)
+          USER_OID=$(az ad signed-in-user show --query "id" -o tsv 2>/dev/null || true)
           if [ -n "$USER_OID" ]; then
-            ROLES=$(az role assignment list --assignee "$USER_OID" --subscription "$SUB_ID" --query "[].roleDefinitionName" -o tsv 2>/dev/null)
+            ROLES=$(az role assignment list --assignee "$USER_OID" --subscription "$SUB_ID" --query "[].roleDefinitionName" -o tsv 2>/dev/null || true)
             if echo "$ROLES" | grep -qE "Owner|Contributor"; then
               printf "${Green}   [OK] Sufficient permissions (Contributor or Owner)${NC}\n"
             else
