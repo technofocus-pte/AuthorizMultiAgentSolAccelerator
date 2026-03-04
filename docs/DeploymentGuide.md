@@ -88,13 +88,7 @@ Select one of the following options to set up your deployment environment:
 1. Click the badge above (may take several minutes to load)
 2. Accept default values on the Codespaces creation page
 3. Wait for the environment to initialize — the setup script automatically installs Python and Node.js dependencies (~2–3 minutes). You'll see `Setup complete! 🎉` in the terminal when it's done.
-4. **Authenticate with Azure** (both CLI tools are required):
-   ```bash
-   azd auth login --use-device-code
-   az login --use-device-code
-   ```
-   > **Note:** Codespaces runs on GitHub-hosted VMs. If your organization enforces Conditional Access policies (e.g., IP/location restrictions), your corporate Azure account may be blocked. In that case, use a personal or non-corp Azure account for deployment.
-5. Proceed to [Step 4: Deploy the Solution](#step-4-deploy-the-solution) (skip Step 3 — credentials are configured after `azd up` provisions the Foundry resources)
+4. Proceed to [Step 4: Deploy the Solution](#step-4-deploy-the-solution) (skip Step 3 — credentials are configured after `azd up` provisions the Foundry resources)
 
 [![Open in Dev Containers](https://img.shields.io/static/v1?style=for-the-badge&label=Dev%20Containers&message=Open&color=blue&logo=visualstudiocode)](https://vscode.dev/redirect?url=vscode://ms-vscode-remote.remote-containers/cloneInVolume?url=https://github.com/amitmukh/prior-auth-maf)
 
