@@ -50,16 +50,11 @@ Ensure you have access to an [Azure subscription](https://azure.microsoft.com/fr
 
 ### 1.3 Claude Model Access (Pre-check)
 
-💡 **OPTIONAL:** Before deployment, you can verify that Claude Sonnet 4.6 is available in your target region.
+💡 **OPTIONAL:** Before deployment, verify that Claude models are available in your target region.
 
-1. Go to [Microsoft Foundry](https://ai.azure.com/)
-2. Click the **Discover** tab → select **Models** in the left menu
-3. Search for **Claude Sonnet 4.6** (model ID: `claude-sonnet-4-6`)
-4. Verify the model is listed for **East US 2** or **Sweden Central**
+Claude models on Microsoft Foundry are currently available in **East US 2** and **Sweden Central**. Check the latest region availability at [Use Foundry Models Claude](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/how-to/use-foundry-models-claude).
 
-> **Note:** The AI Foundry Hub and Project are created automatically during deployment. You will deploy the Claude model and configure its API key/endpoint in Step 4.3 after `azd up` completes.
-
-📖 **Learn More:** See [Use Foundry Models Claude](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/how-to/use-foundry-models-claude) for detailed setup instructions.
+> **Note:** You do **not** need to create a Foundry project or deploy the Claude model before running `azd up`. The AI Foundry Hub and Project are provisioned automatically during deployment. You will deploy the Claude model and configure credentials in Step 4.3 after `azd up` completes.
 
 ---
 
