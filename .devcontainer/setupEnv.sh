@@ -15,6 +15,10 @@ else
   echo "azd already available: $(azd version)"
 fi
 
+echo "Installing Azure CLI extensions..."
+az extension add --name containerapp --yes 2>/dev/null || echo "⚠️ containerapp extension install skipped"
+az extension add --name ml --yes 2>/dev/null || echo "⚠️ ml extension install skipped"
+
 echo "Setting up Backend..."
 cd ./backend
 pip install --upgrade pip
