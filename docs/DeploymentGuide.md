@@ -323,9 +323,28 @@ azd env set AZURE_FOUNDRY_ENDPOINT https://<resource-name>.services.ai.azure.com
 azd env set CLAUDE_MODEL claude-sonnet-4-6    # Must match your deployment name
 ```
 
-> **Important:** The endpoint URL must include the `/anthropic` suffix. Copy the **Project endpoint** from the Foundry Home tab and append `/anthropic`.
+ > **Important:** The endpoint URL must include the `/anthropic` suffix. Copy the **Project endpoint** from the Foundry Home tab and append `/anthropic`.
 
-Then redeploy to apply the credentials:
+Then apply the credentials to the deployed backend. You have two options:
+
+**Option A: Quick update (~10 seconds)** — updates the Container App directly without rebuilding images:
+
+```bash
+APP_NAME=$(azd env get-value BACKEND_CONTAINER_APP_NAME)
+RG_NAME=$(azd env get-value AZURE_RESOURCE_GROUP)
+
+# Update the API key secret
+az containerapp secret set --name $APP_NAME --resource-group $RG_NAME \
+  --secrets foundry-api-key=$(azd env get-value AZURE_FOUNDRY_API_KEY)
+
+# Update endpoint and model env vars
+az containerapp update --name $APP_NAME --resource-group $RG_NAME \
+  --set-env-vars \
+    ANTHROPIC_FOUNDRY_BASE_URL=$(azd env get-value AZURE_FOUNDRY_ENDPOINT) \
+    CLAUDE_MODEL=$(azd env get-value CLAUDE_MODEL)
+```
+
+**Option B: Full redeploy (~5 minutes)** — use when you also need to update application code:
 
 ```bash
 azd up
