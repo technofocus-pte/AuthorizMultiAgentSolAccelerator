@@ -482,22 +482,22 @@ hooks:
           else
             CA_REMAINING=$((CA_ENV_LIMIT - CA_ENV_USAGE))
             if [ "$CA_REMAINING" -gt 0 ]; then
-              printf "${Gray} │ Container Apps Environments    │ %6s │ %6s/%s │  ${Green}OK${Gray}  │${NC}\n" "$CA_ENV_USAGE" "$CA_REMAINING" "$CA_ENV_LIMIT"
+              printf "${Gray} │ Container Apps Environments    │ %6s │ %9s │  ${Green}OK${Gray}  │${NC}\n" "$CA_ENV_USAGE" "$CA_REMAINING/$CA_ENV_LIMIT"
             else
-              printf "${Gray} │ Container Apps Environments    │ %6s │ %6s/%s │ ${Red}FULL${Gray} │${NC}\n" "$CA_ENV_USAGE" "0" "$CA_ENV_LIMIT"
+              printf "${Gray} │ Container Apps Environments    │ %6s │ %9s │ ${Red}FULL${Gray} │${NC}\n" "$CA_ENV_USAGE" "0/$CA_ENV_LIMIT"
             fi
           fi
           if [ "$ACR_USAGE" = "N/A" ]; then
             printf "${Gray} │ Container Registries           │    N/A │       N/A │ ${Yellow}SKIP${Gray} │${NC}\n"
           else
             ACR_REMAINING=$((ACR_LIMIT - ACR_USAGE))
-            printf "${Gray} │ Container Registries           │ %6s │ %6s/%s │  ${Green}OK${Gray}  │${NC}\n" "$ACR_USAGE" "$ACR_REMAINING" "$ACR_LIMIT"
+            printf "${Gray} │ Container Registries           │ %6s │ %9s │  ${Green}OK${Gray}  │${NC}\n" "$ACR_USAGE" "$ACR_REMAINING/$ACR_LIMIT"
           fi
           if [ "$ML_USAGE" = "N/A" ]; then
             printf "${Gray} │ Foundry Resources              │    N/A │       N/A │ ${Yellow}SKIP${Gray} │${NC}\n"
           else
             ML_REMAINING=$((ML_LIMIT - ML_USAGE))
-            printf "${Gray} │ Foundry Resources              │ %6s │ %6s/%s │  ${Green}OK${Gray}  │${NC}\n" "$ML_USAGE" "$ML_REMAINING" "$ML_LIMIT"
+            printf "${Gray} │ Foundry Resources              │ %6s │ %9s │  ${Green}OK${Gray}  │${NC}\n" "$ML_USAGE" "$ML_REMAINING/$ML_LIMIT"
           fi
           printf "${Gray} └────────────────────────────────┴────────┴───────────┴────────┘${NC}\n"
 
