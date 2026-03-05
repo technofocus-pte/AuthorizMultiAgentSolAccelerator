@@ -242,7 +242,7 @@ hooks:
 
           # Foundry Resources
           $mlRemaining = $mlLimit - [int]$mlUsage
-          Write-Host " │ Foundry Resources               │ $($mlUsage.ToString().PadLeft(6)) │ $($mlRemaining.ToString().PadLeft(6))/$mlLimit │  " -ForegroundColor Gray -NoNewline
+          Write-Host " │ Foundry Resources              │ $($mlUsage.ToString().PadLeft(6)) │ $($mlRemaining.ToString().PadLeft(6))/$mlLimit │  " -ForegroundColor Gray -NoNewline
           Write-Host "OK" -ForegroundColor Green -NoNewline
           Write-Host "  │" -ForegroundColor Gray
 
@@ -494,10 +494,10 @@ hooks:
             printf "${Gray} │ Container Registries           │ %6s │ %6s/%s │  ${Green}OK${Gray}  │${NC}\n" "$ACR_USAGE" "$ACR_REMAINING" "$ACR_LIMIT"
           fi
           if [ "$ML_USAGE" = "N/A" ]; then
-            printf "${Gray} │ Foundry Resources               │    N/A │       N/A │ ${Yellow}SKIP${Gray} │${NC}\n"
+            printf "${Gray} │ Foundry Resources              │    N/A │       N/A │ ${Yellow}SKIP${Gray} │${NC}\n"
           else
             ML_REMAINING=$((ML_LIMIT - ML_USAGE))
-            printf "${Gray} │ Foundry Resources               │ %6s │ %6s/%s │  ${Green}OK${Gray}  │${NC}\n" "$ML_USAGE" "$ML_REMAINING" "$ML_LIMIT"
+            printf "${Gray} │ Foundry Resources              │ %6s │ %6s/%s │  ${Green}OK${Gray}  │${NC}\n" "$ML_USAGE" "$ML_REMAINING" "$ML_LIMIT"
           fi
           printf "${Gray} └────────────────────────────────┴────────┴───────────┴────────┘${NC}\n"
 
