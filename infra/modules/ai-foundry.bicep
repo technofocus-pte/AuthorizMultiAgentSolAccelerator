@@ -15,9 +15,6 @@ param location string
 @description('Tags for all resources')
 param tags object = {}
 
-@description('Application Insights resource ID (optional — not used by new Foundry, kept for interface compatibility)')
-param appInsightsId string = ''
-
 // ── Microsoft Foundry Resource ──────────────────────────────────────────────
 
 resource foundryAccount 'Microsoft.CognitiveServices/accounts@2025-06-01' = {

@@ -37,12 +37,12 @@ Ensure you have access to an [Azure subscription](https://azure.microsoft.com/fr
 
 | **Service** | **Purpose** | **Pricing** |
 |-------------|-------------|-------------|
-| [Microsoft Foundry](https://learn.microsoft.com/en-us/azure/ai-foundry/) | AI Foundry Hub + Project (auto-provisioned) | [Pricing](https://azure.microsoft.com/en-us/pricing/details/ai-foundry/) |
+| [Microsoft Foundry](https://learn.microsoft.com/en-us/azure/ai-foundry/) | Foundry Resource + Project (auto-provisioned) | [Pricing](https://azure.microsoft.com/en-us/pricing/details/ai-foundry/) |
 | [Azure Container Apps](https://learn.microsoft.com/en-us/azure/container-apps/) | Hosting backend and frontend containers | [Pricing](https://azure.microsoft.com/en-us/pricing/details/container-apps/) |
 | [Azure Container Registry](https://learn.microsoft.com/en-us/azure/container-registry/) | Storing Docker images | [Pricing](https://azure.microsoft.com/en-us/pricing/details/container-registry/) |
 | [Azure Application Insights](https://learn.microsoft.com/en-us/azure/azure-monitor/app/app-insights-overview) | Observability and tracing (optional) | [Pricing](https://azure.microsoft.com/en-us/pricing/details/monitor/) |
 
-> **Note:** The AI Foundry Hub and Project are automatically provisioned by `azd up`. You only need to deploy the Claude model manually after provisioning (see Step 4.3).
+> **Note:** The Microsoft Foundry Resource and Project are automatically provisioned by `azd up`. You only need to deploy the Claude model manually after provisioning (see Step 4.3).
 
 **Supported Regions:** Claude models on Microsoft Foundry are currently available only in **East US 2** and **Sweden Central**. You must deploy to one of these regions.
 
@@ -275,14 +275,13 @@ azd up
 4. **Azure Foundry API key** and **endpoint** — press **Enter** to skip (leave blank). These are configured in Step 4.3 after the Foundry resources are provisioned.
 
 **What gets deployed:**
-- **AI Foundry Hub + Project** (for Claude model deployment)
+- **Microsoft Foundry Resource + Project** (for Claude model deployment)
 - Azure Container Registry (also used for remote image builds — no local Docker required)
 - Azure Container Apps Environment
 - Backend Container App (Python/FastAPI, port 8000)
 - Frontend Container App (Next.js/nginx, port 80)
 - Log Analytics workspace
 - Application Insights
-- Storage Account and Key Vault (AI Foundry dependencies)
 
 > **Note:** Container images are built remotely on Azure Container Registry, so no local Docker installation is required for deployment. This works on any machine architecture (x86, ARM64) and any OS.
 
@@ -292,9 +291,9 @@ azd up
 
 ### 4.3 Deploy Claude Model & Configure Credentials
 
-After `azd up` completes, the AI Foundry Hub and Project are provisioned. Now deploy the Claude model:
+After `azd up` completes, the Microsoft Foundry Resource and Project are provisioned. Now deploy the Claude model:
 
-**Step 1: Open the AI Foundry Portal**
+**Step 1: Open the Microsoft Foundry Portal**
 
 The portal URL is displayed in the deployment output, or navigate directly:
 
@@ -475,7 +474,7 @@ Foundry Control Plane uses the Application Insights resource associated with you
 | **Protocol** | HTTP |
 | **OpenTelemetry Agent ID** | `prior-auth-orchestrator` |
 | **Admin portal URL** | *(optional)* Your Azure Portal resource group URL |
-| **Project** | Select the auto-provisioned AI Foundry project |
+| **Project** | Select the auto-provisioned Microsoft Foundry project |
 | **Agent name** | `Prior Auth Orchestrator` |
 | **Description** | Multi-agent prior authorization review system. Orchestrates Clinical Reviewer, Compliance Validation, Coverage Assessment, and Synthesis agents in a fan-out/fan-in pattern to produce structured PA recommendations for human reviewers. |
 

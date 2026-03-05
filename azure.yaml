@@ -271,7 +271,7 @@ hooks:
           Write-Host ""
           Write-Host " Resources to be created:" -ForegroundColor Yellow
           Write-Host "   • Resource Group" -ForegroundColor White
-          Write-Host "   • Microsoft Foundry Hub + Project (+ Storage Account, Key Vault)" -ForegroundColor White
+          Write-Host "   • Microsoft Foundry Resource + Project" -ForegroundColor White
           Write-Host "   • Container Registry" -ForegroundColor White
           Write-Host "   • Container Apps Environment" -ForegroundColor White
           Write-Host "   • Backend Container App (Python/FastAPI)" -ForegroundColor White
@@ -519,7 +519,7 @@ hooks:
           # Resources to be created
           printf "\n${Yellow} Resources to be created:${NC}\n"
           printf "   • Resource Group\n"
-          printf "   • Microsoft Foundry Hub + Project (+ Storage Account, Key Vault)\n"
+          printf "   • Microsoft Foundry Resource + Project\n"
           printf "   • Container Registry\n"
           printf "   • Container Apps Environment\n"
           printf "   • Backend Container App (Python/FastAPI)\n"
