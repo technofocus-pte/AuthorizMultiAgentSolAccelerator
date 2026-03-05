@@ -178,7 +178,7 @@ Pricing varies per region and usage, so it isn't possible to predict exact costs
 | Azure Service | Purpose | Pricing |
 |--------------|---------|---------|
 | [Microsoft Foundry](https://azure.microsoft.com/en-us/pricing/details/ai-foundry/) | Foundry Resource + Project (auto-provisioned) + Claude model inference | [Pricing](https://azure.microsoft.com/en-us/pricing/details/ai-foundry/) |
-| [Azure Container Apps](https://azure.microsoft.com/en-us/pricing/details/container-apps/) | Backend + frontend hosting | [Pricing](https://azure.microsoft.com/en-us/pricing/details/container-apps/) |
+| [Azure Container Apps](https://azure.microsoft.com/en-us/pricing/details/container-apps/) | Backend (2 CPU / 4Gi, min 1 replica) + frontend hosting | [Pricing](https://azure.microsoft.com/en-us/pricing/details/container-apps/) |
 | [Azure Container Registry](https://azure.microsoft.com/en-us/pricing/details/container-registry/) | Docker image storage | [Pricing](https://azure.microsoft.com/en-us/pricing/details/container-registry/) |
 | [Azure Application Insights](https://azure.microsoft.com/en-us/pricing/details/monitor/) | Observability and tracing (optional) | [Pricing](https://azure.microsoft.com/en-us/pricing/details/monitor/) |
 

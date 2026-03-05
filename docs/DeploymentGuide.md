@@ -38,7 +38,7 @@ Ensure you have access to an [Azure subscription](https://azure.microsoft.com/fr
 | **Service** | **Purpose** | **Pricing** |
 |-------------|-------------|-------------|
 | [Microsoft Foundry](https://learn.microsoft.com/en-us/azure/ai-foundry/) | Foundry Resource + Project (auto-provisioned) | [Pricing](https://azure.microsoft.com/en-us/pricing/details/ai-foundry/) |
-| [Azure Container Apps](https://learn.microsoft.com/en-us/azure/container-apps/) | Hosting backend and frontend containers | [Pricing](https://azure.microsoft.com/en-us/pricing/details/container-apps/) |
+| [Azure Container Apps](https://learn.microsoft.com/en-us/azure/container-apps/) | Backend (2 CPU / 4Gi, min 1 replica) + frontend containers | [Pricing](https://azure.microsoft.com/en-us/pricing/details/container-apps/) |
 | [Azure Container Registry](https://learn.microsoft.com/en-us/azure/container-registry/) | Storing Docker images | [Pricing](https://azure.microsoft.com/en-us/pricing/details/container-registry/) |
 | [Azure Application Insights](https://learn.microsoft.com/en-us/azure/azure-monitor/app/app-insights-overview) | Observability and tracing (optional) | [Pricing](https://azure.microsoft.com/en-us/pricing/details/monitor/) |
 
@@ -278,7 +278,7 @@ azd up
 - **Microsoft Foundry Resource + Project** (for Claude model deployment)
 - Azure Container Registry (also used for remote image builds — no local Docker required)
 - Azure Container Apps Environment
-- Backend Container App (Python/FastAPI, port 8000)
+- Backend Container App (Python/FastAPI, port 8000, 2 CPU / 4Gi RAM, min 1 replica)
 - Frontend Container App (Next.js/nginx, port 80)
 - Log Analytics workspace
 - Application Insights
