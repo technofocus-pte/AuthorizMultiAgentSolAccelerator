@@ -1,10 +1,12 @@
 // ---------------------------------------------------------------------------
-// Azure AI Foundry — Hub + Project
-// Creates the AI Foundry hub with required dependencies (Storage, Key Vault)
-// and a project for deploying Claude models from the model catalog.
+// Microsoft Foundry — Resource + Project (new architecture)
+// Creates the Foundry resource (CognitiveServices/accounts) and a project
+// for deploying Claude models from the model catalog.
+//
+// Reference: https://learn.microsoft.com/en-us/azure/foundry/how-to/create-resource-template
 // ---------------------------------------------------------------------------
 
-@description('Base name for AI Foundry resources')
+@description('Base name for Foundry resources')
 param name string
 
 @description('Location for all resources')
@@ -13,84 +15,47 @@ param location string
 @description('Tags for all resources')
 param tags object = {}
 
-@description('Application Insights resource ID (optional)')
+@description('Application Insights resource ID (optional — not used by new Foundry, kept for interface compatibility)')
 param appInsightsId string = ''
 
-// ── Storage Account (required dependency for AI Hub) ────────────────────────
+// ── Microsoft Foundry Resource ──────────────────────────────────────────────
 
-resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
-  name: take(replace('st${name}', '-', ''), 24)
+resource foundryAccount 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
+  name: 'foundry-${name}'
   location: location
   tags: tags
+  identity: {
+    type: 'SystemAssigned'
+  }
   sku: {
-    name: 'Standard_LRS'
+    name: 'S0'
   }
-  kind: 'StorageV2'
+  kind: 'AIServices'
   properties: {
-    minimumTlsVersion: 'TLS1_2'
-    supportsHttpsTrafficOnly: true
-    allowBlobPublicAccess: false
+    allowProjectManagement: true
+    customSubDomainName: 'foundry-${name}'
+    disableLocalAuth: false
   }
 }
 
-// ── Key Vault (required dependency for AI Hub) ──────────────────────────────
+// ── Microsoft Foundry Project ───────────────────────────────────────────────
 
-resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
-  name: take('kv-${name}', 24)
-  location: location
-  tags: tags
-  properties: {
-    tenantId: subscription().tenantId
-    sku: {
-      family: 'A'
-      name: 'standard'
-    }
-    enableRbacAuthorization: true
-    enableSoftDelete: true
-    softDeleteRetentionInDays: 7
-  }
-}
-
-// ── AI Foundry Hub ──────────────────────────────────────────────────────────
-
-resource aiHub 'Microsoft.MachineLearningServices/workspaces@2024-10-01' = {
-  name: 'hub-${name}'
-  location: location
-  tags: tags
-  kind: 'Hub'
-  identity: {
-    type: 'SystemAssigned'
-  }
-  properties: {
-    friendlyName: 'Prior Auth AI Foundry Hub'
-    description: 'AI Foundry hub for Prior Authorization multi-agent solution'
-    storageAccount: storageAccount.id
-    keyVault: keyVault.id
-    applicationInsights: appInsightsId != '' ? appInsightsId : null
-  }
-}
-
-// ── AI Foundry Project ──────────────────────────────────────────────────────
-
-resource aiProject 'Microsoft.MachineLearningServices/workspaces@2024-10-01' = {
+resource foundryProject 'Microsoft.CognitiveServices/accounts/projects@2025-06-01' = {
   name: 'proj-${name}'
+  parent: foundryAccount
   location: location
   tags: tags
-  kind: 'Project'
   identity: {
     type: 'SystemAssigned'
   }
-  properties: {
-    friendlyName: 'Prior Auth Project'
-    description: 'AI Foundry project for deploying Claude models'
-    hubResourceId: aiHub.id
-  }
+  properties: {}
 }
 
 // ── Outputs ─────────────────────────────────────────────────────────────────
 
-output hubName string = aiHub.name
-output projectName string = aiProject.name
-output hubId string = aiHub.id
-output projectId string = aiProject.id
-output portalUrl string = 'https://ai.azure.com/manage/project?wsid=${aiProject.id}'
+output accountName string = foundryAccount.name
+output projectName string = foundryProject.name
+output accountId string = foundryAccount.id
+output projectId string = foundryProject.id
+output endpoint string = foundryAccount.properties.endpoint
+output portalUrl string = 'https://ai.azure.com/manage/project?wsid=${foundryProject.id}'

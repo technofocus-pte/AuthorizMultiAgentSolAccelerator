@@ -80,7 +80,7 @@ module monitoring './modules/monitoring.bicep' = {
   }
 }
 
-// ── AI Foundry (Hub + Project) ──────────────────────────────────────────────
+// ── Microsoft Foundry (Resource + Project) ──────────────────────────────────
 
 module aiFoundry './modules/ai-foundry.bicep' = {
   name: 'ai-foundry'
@@ -89,7 +89,6 @@ module aiFoundry './modules/ai-foundry.bicep' = {
     name: '${abbrs.aiFoundry}${resourceToken}'
     location: location
     tags: tags
-    appInsightsId: monitoring.outputs.appInsightsResourceId
   }
 }
 
@@ -163,8 +162,9 @@ module frontend './modules/container-app.bicep' = {
 
 output AZURE_RESOURCE_GROUP string = rg.name
 output AZURE_CONTAINER_REGISTRY_ENDPOINT string = containerRegistry.outputs.loginServer
-output AI_FOUNDRY_HUB_NAME string = aiFoundry.outputs.hubName
+output AI_FOUNDRY_ACCOUNT_NAME string = aiFoundry.outputs.accountName
 output AI_FOUNDRY_PROJECT_NAME string = aiFoundry.outputs.projectName
+output AI_FOUNDRY_ENDPOINT string = aiFoundry.outputs.endpoint
 output AI_FOUNDRY_PORTAL_URL string = aiFoundry.outputs.portalUrl
 output BACKEND_CONTAINER_APP_NAME string = backend.outputs.name
 output FRONTEND_CONTAINER_APP_NAME string = frontend.outputs.name
