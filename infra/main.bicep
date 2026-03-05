@@ -32,9 +32,6 @@ param azureFoundryEndpoint string = ''
 @description('Claude model name (e.g., claude-sonnet-4-6, claude-opus-4-5)')
 param claudeModel string = 'claude-sonnet-4-6'
 
-@description('Application Insights connection string (optional)')
-param appInsightsConnectionString string = ''
-
 @description('Whether container images have been built to ACR (set automatically by postprovision hook)')
 param imagesBuilt string = ''
 
@@ -128,7 +125,7 @@ module backend './modules/container-app.bicep' = {
       { name: 'ANTHROPIC_FOUNDRY_API_KEY', secretRef: 'foundry-api-key' }
       { name: 'ANTHROPIC_FOUNDRY_BASE_URL', value: azureFoundryEndpoint }
       { name: 'CLAUDE_MODEL', value: claudeModel }
-      { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsightsConnectionString != '' ? appInsightsConnectionString : monitoring.outputs.appInsightsConnectionString }
+      { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: monitoring.outputs.appInsightsConnectionString }
       { name: 'FRONTEND_ORIGIN', value: 'https://${abbrs.appContainerApps}frontend-${resourceToken}.${containerAppsEnv.outputs.defaultDomain}' }
     ]
     secrets: [
