@@ -304,6 +304,21 @@ function ClinicalTab({ data: raw }: { data: ClinicalResult }) {
   };
   return (
     <div className="space-y-4">
+      {/* Low confidence extraction warning */}
+      {data.clinical_extraction && data.clinical_extraction.extraction_confidence < 60 && (
+        <div className="flex items-start gap-2 rounded-md border border-warning/50 bg-warning/5 p-3">
+          <AlertTriangle className="h-4 w-4 text-warning shrink-0 mt-0.5" />
+          <div className="text-sm">
+            <span className="font-medium text-warning">Low Extraction Confidence</span>
+            <span className="text-muted-foreground">
+              {" "}({data.clinical_extraction.extraction_confidence}%) — clinical documentation
+              was insufficient for high-confidence extraction. Findings below may be incomplete.
+              Consider requesting additional supporting documentation.
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Checks summary — always visible */}
       <ChecksSummary
         checks={data.checks_performed}
@@ -801,6 +816,12 @@ interface SynthesisData {
   criteria_summary?: string;
   clinical_rationale?: string;
   missing_documentation?: string[];
+  disclaimer?: string;
+  synthesis_audit_trail?: {
+    gate_results?: Record<string, string>;
+    confidence_components?: Record<string, number>;
+    agents_consulted?: string[];
+  };
 }
 
 type GateStatus = "pass" | "fail" | "na";
@@ -934,6 +955,48 @@ function SynthesisTab({ data }: { data: SynthesisData }) {
             ))}
           </ul>
         </CollapsibleSection>
+      )}
+
+      {/* Confidence Score Breakdown */}
+      {data.synthesis_audit_trail?.confidence_components &&
+        Object.keys(data.synthesis_audit_trail.confidence_components).length > 0 && (
+        <CollapsibleSection title="Confidence Score Breakdown" icon={Bot}>
+          <div className="space-y-2.5">
+            <p className="text-xs text-muted-foreground pb-1">
+              Weighted: 40% criteria quality + 30% extraction + 20% documentation + 10% policy alignment
+            </p>
+            {([
+              { label: "Criteria Quality",           wKey: "criteria_weight",   sKey: "criteria_score" },
+              { label: "Clinical Extraction",         wKey: "extraction_weight", sKey: "extraction_score" },
+              { label: "Documentation Completeness",  wKey: "compliance_weight", sKey: "compliance_score" },
+              { label: "Policy Alignment",            wKey: "policy_weight",     sKey: "policy_score" },
+            ] as const).map((row, i) => {
+              const cc = data.synthesis_audit_trail!.confidence_components!;
+              const score = cc[row.sKey] ?? 0;
+              const weight = cc[row.wKey] ?? 0;
+              return (
+                <div key={i} className="flex items-center gap-3">
+                  <span className="text-sm flex-1">{row.label}</span>
+                  <span className="text-xs text-muted-foreground w-10 text-right shrink-0">
+                    ×{Math.round(weight * 100)}%
+                  </span>
+                  <ConfidenceBar value={Math.round(score * 100)} className="w-28 shrink-0" />
+                  <span className="text-xs text-muted-foreground w-8 text-right shrink-0">
+                    {Math.round(score * 100)}%
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </CollapsibleSection>
+      )}
+
+      {/* Disclaimer */}
+      {data.disclaimer && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-50/40 dark:bg-amber-950/20 p-3">
+          <AlertCircle className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">{data.disclaimer}</p>
+        </div>
       )}
     </div>
   );

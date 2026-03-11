@@ -142,6 +142,12 @@ export interface AuditTrail {
   criteria_met_count: string; // "N/M" format
 }
 
+export interface SynthesisAuditTrail {
+  gate_results?: Record<string, string>;          // "gate_1_provider": "PASS|FAIL"
+  confidence_components?: Record<string, number>; // criteria_weight, criteria_score, ...
+  agents_consulted?: string[];
+}
+
 export interface ReviewResponse {
   request_id: string;
   recommendation: "approve" | "pend_for_review";
@@ -157,6 +163,7 @@ export interface ReviewResponse {
   policy_references: string[];
   decision_gate?: string;   // "gate_1_provider" | "gate_2_codes" | "gate_3_necessity" | "approved"
   criteria_summary?: string; // e.g. "8 of 8 criteria MET"
+  synthesis_audit_trail?: SynthesisAuditTrail;
   disclaimer: string;
   agent_results?: AgentResults;
   audit_trail?: AuditTrail;

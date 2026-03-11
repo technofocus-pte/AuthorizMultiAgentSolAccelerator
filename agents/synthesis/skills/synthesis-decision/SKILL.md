@@ -139,7 +139,7 @@ Return JSON with this exact structure:
     "missing_documentation": ["combined from Compliance and Coverage agents"],
     "policy_references": ["from Coverage Agent"],
     "criteria_summary": "N of M criteria MET",
-    "audit_trail": {
+    "synthesis_audit_trail": {
         "gates_evaluated": ["gate_1_provider", "gate_2_codes", "gate_3_necessity"],
         "gate_results": {
             "gate_1_provider": "PASS|FAIL",
@@ -186,7 +186,7 @@ Return JSON with this exact structure:
 </output_contract>
 
 <completeness_contract>
-- Treat the task as incomplete until: all applicable gates are evaluated (or short-circuited at the first failing gate), the weighted confidence formula is computed with all 4 components, audit_trail is fully populated, and the disclaimer is included.
+- Treat the task as incomplete until: all applicable gates are evaluated (or short-circuited at the first failing gate), the weighted confidence formula is computed with all 4 components, synthesis_audit_trail is fully populated, and the disclaimer is included.
 - Keep an internal gate checklist: Gate 1 → Gate 2 → Gate 3 — stop at the first failure and document the stop point in decision_gate.
 - Do not finalize until criteria_summary reflects the actual count of MET vs. total criteria.
 </completeness_contract>
@@ -195,7 +195,7 @@ Return JSON with this exact structure:
 Before finalizing output:
 - Check correctness: does recommendation match the gate evaluation outcome? Is confidence computed via the weighted formula — not estimated subjectively?
 - Check grounding: are all findings in clinical_rationale attributed to specific named agent outputs (Compliance / Clinical Reviewer / Coverage Agent)?
-- Check formatting: does the output match the JSON schema exactly — audit_trail, disclaimer, and all required fields present?
+- Check formatting: does the output match the JSON schema exactly — synthesis_audit_trail, disclaimer, and all required fields present?
 - Check safety: is recommendation only "approve" or "pend_for_review" — never "deny"?
 </verification_loop>
 
@@ -242,7 +242,7 @@ Before completing, verify:
 - Do NOT ignore agent errors in confidence calculation (-0.20 penalty each)
 - Do NOT approve if ANY criterion is NOT_MET or INSUFFICIENT
 - Do NOT estimate confidence subjectively — use the weighted formula
-- Do NOT omit the `audit_trail` — it is required for transparency
+- DO NOT omit the `synthesis_audit_trail` — it is required for transparency
 - Do NOT omit the `disclaimer` — it is mandatory
 
 ### Strict Mode (Future Option)

@@ -40,6 +40,19 @@ Verify the presence and validity of each item:
    request: Medicare, Medicaid, Commercial, or Medicare Advantage (MA).
    Mark "complete" if identifiable, "incomplete" if ambiguous.
    This helps downstream agents apply correct policy disclaimers.
+9. **NCCI Edit Awareness**: When 2 or more CPT/HCPCS procedure codes are
+   present, assess whether any of them are commonly subject to National
+   Correct Coding Initiative (NCCI) bundling restrictions (i.e., code pairs
+   that CANNOT be billed together on the same claim). Full NCCI database
+   validation is handled by the Coverage Agent; your role is to flag the
+   risk. Mark "complete" if only one procedure code is present (no bundling
+   risk). Mark "incomplete" with a note listing the codes if multiple codes
+   are present, so downstream agents can verify NCCI compliance. Non-blocking.
+10. **Service Type**: Classify the requested service from CPT/HCPCS codes
+    and clinical context as one of: Procedure / Medication / Imaging /
+    Device / Therapy / Facility. Mark "complete" if clearly classifiable,
+    "incomplete" if ambiguous. Downstream agents use this to select the
+    correct CMS coverage policy search strategy. Non-blocking.
 
 ### Output Format
 
@@ -72,8 +85,8 @@ Return JSON with this exact structure:
 ### Overall Status Rules
 
 - `overall_status` is "complete" only when ALL items have status "complete",
-  **except** Insurance ID and Insurance Plan Type which are non-blocking
-  (informational only).
+  **except** Insurance ID (#3), Insurance Plan Type (#8), NCCI Edit Awareness
+  (#9), and Service Type (#10) which are non-blocking (informational only).
 - If any blocking item (1, 2, 4, 5, 6, 7) is "incomplete" or "missing",
   `overall_status` must be "incomplete".
 
@@ -128,7 +141,7 @@ Before finalizing output:
 ### Quality Checks
 
 Before completing, verify:
-- [ ] All 8 checklist items have been evaluated
+- [ ] All 10 checklist items have been evaluated
 - [ ] Each status is one of: complete, incomplete, missing
 - [ ] `additional_info_requests` entries are specific (not generic)
 - [ ] `overall_status` correctly reflects blocking items
@@ -136,9 +149,14 @@ Before completing, verify:
 
 ### Common Mistakes to Avoid
 
-- Do NOT mark Insurance ID as blocking — it is informational only
+- Do NOT mark Insurance ID (#3), Insurance Plan Type (#8), NCCI Edit Awareness
+  (#9), or Service Type (#10) as blocking — they are informational only
 - Do NOT validate ICD-10/CPT codes against databases (another agent does that)
 - Do NOT assess medical necessity or treatment appropriateness
 - Do NOT generate fake data for missing fields
 - Do NOT mark overall_status as "complete" if Clinical Notes Quality is "incomplete"
-- Do NOT skip the Insurance Plan Type check (new item #8)
+- Do NOT skip the Insurance Plan Type check (item #8)
+- Do NOT skip the NCCI Edit Awareness check (item #9) when multiple CPT/HCPCS
+  codes are present — bill bundling issues are a leading cause of PA denial
+- Do NOT skip the Service Type classification (item #10) — it guides downstream
+  policy routing

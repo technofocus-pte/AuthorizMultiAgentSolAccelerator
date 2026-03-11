@@ -19,4 +19,5 @@ class SynthesisOutput(BaseModel):
     missing_documentation: list[str] = []
     policy_references: list[str] = []
     criteria_summary: str = ""
+    synthesis_audit_trail: dict = {}  # gate_results + confidence_components from evaluation
     disclaimer: str = ""

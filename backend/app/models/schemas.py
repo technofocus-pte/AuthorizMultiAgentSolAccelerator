@@ -157,6 +157,7 @@ class SynthesisOutput(BaseModel):
     missing_documentation: list[str] = []
     policy_references: list[str] = []
     criteria_summary: str = ""
+    synthesis_audit_trail: dict = {}  # gate_results + confidence_components from evaluation
     disclaimer: str = ""
 
 
@@ -184,6 +185,7 @@ class ReviewResponse(BaseModel):
     policy_references: list[str] = []
     decision_gate: str = ""  # "gate_1_provider", "gate_2_codes", "gate_3_necessity", "approved"
     criteria_summary: str = ""  # e.g. "8 of 8 criteria MET"
+    synthesis_audit_trail: dict = {}  # gate_results + confidence_components from synthesis agent
     disclaimer: str = "AI-assisted draft. Medicare LCDs/NCDs applied. Human review required."
     agent_results: AgentResults | None = None
     audit_trail: AuditTrail | None = None

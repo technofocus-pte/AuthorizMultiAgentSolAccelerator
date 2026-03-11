@@ -69,6 +69,21 @@ for efficiency (NPI validation is independent of policy search).
    full provider details.
 3. Verify: provider is active, has appropriate specialty for the requested
    procedure, and license is current.
+4. **Specialty-Procedure Appropriateness (REQUIRED criterion)**: Using the
+   provider's taxonomy description returned by NPI lookup, determine whether
+   their specialty is clinically appropriate for the category of service
+   being requested. Add this as an explicit entry in `criteria_assessment`:
+   - `criterion`: `"Provider Specialty-Procedure Appropriateness"`
+   - `status`: `MET` if the taxonomy aligns with the requested CPT category
+     (e.g., orthopedic surgeon requesting a joint replacement, pulmonologist
+     requesting a bronchoscopy); `NOT_MET` if the specialty is clearly outside
+     scope (e.g., cardiologist requesting orthopedic surgery); `INSUFFICIENT`
+     if taxonomy is ambiguous, unavailable, or demo-mode NPI was used.
+   - `evidence`: cite the provider's taxonomy description and the CPT code
+     category being requested.
+   - `source`: `"NPI Registry (NPPES)"`
+   This criterion creates an auditable specialty-match record alongside the
+   clinical and policy criteria evaluated by the Synthesis Agent.
 
 **Demo Mode NPI Bypass:**
 Demo mode activates ONLY when BOTH conditions are met:
@@ -304,6 +319,7 @@ Before finalizing output:
 
 Before completing, verify:
 - [ ] Provider NPI verified (or flagged as invalid/inactive)
+- [ ] Specialty-Procedure Appropriateness criterion present in `criteria_assessment`
 - [ ] Coverage policies searched (both national and local)
 - [ ] Policy details retrieved for relevant policies
 - [ ] All policy criteria evaluated with evidence mapping
@@ -316,6 +332,7 @@ Before completing, verify:
 ### Common Mistakes to Avoid
 
 - Do NOT validate ICD-10 codes — that is the Clinical Reviewer's job
+- Do NOT skip the Specialty-Procedure Appropriateness criterion — it is REQUIRED
 - Do NOT skip the Diagnosis-Policy Alignment criterion — it is REQUIRED
 - Do NOT invent criteria if no policy is found — state clearly that no policy was found
 - Do NOT mark a criterion as MET without citing specific clinical evidence
