@@ -16,6 +16,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy agent code and skills
 COPY main.py ./
+COPY schemas.py ./
 COPY skills/ ./skills/
 
 # Non-root user

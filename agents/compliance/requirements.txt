@@ -1,7 +1,8 @@
 # Microsoft Agent Framework — core runtime
 agent-framework>=0.1.0
-# Foundry Hosted Agent server adapter (from_agent_framework)
-azure-ai-agentserver>=0.1.0
+# Self-hosted FastAPI + ASGI server (replaces azure-ai-agentserver)
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
 # Azure OpenAI Responses API client
 azure-ai-projects>=1.0.0
 # Managed identity / DefaultAzureCredential

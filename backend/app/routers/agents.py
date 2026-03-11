@@ -19,7 +19,7 @@ from fastapi import APIRouter
 from app.agents.clinical_agent import run_clinical_review
 from app.agents.compliance_agent import run_compliance_review
 from app.agents.coverage_agent import run_coverage_review
-from app.agents.orchestrator import run_synthesis_review
+from app.agents.synthesis_agent import run_synthesis_review
 from app.models.schemas import (
     CoverageAgentRequest,
     PriorAuthRequest,

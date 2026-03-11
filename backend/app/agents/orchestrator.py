@@ -25,9 +25,9 @@ from datetime import datetime, timezone
 from app.agents.compliance_agent import run_compliance_review
 from app.agents.clinical_agent import run_clinical_review
 from app.agents.coverage_agent import run_coverage_review
+from app.agents.synthesis_agent import run_synthesis_review as _dispatch_synthesis
 from app.config import settings
 from app.models.schemas import SynthesisOutput
-from app.services.hosted_agents import invoke_hosted_agent
 from app.services.audit_pdf import generate_audit_justification_pdf
 from app.services.cpt_validation import validate_procedure_codes
 
@@ -1043,28 +1043,6 @@ async def _run_in_proactor_thread(agent_name: str, fn, *args) -> dict:
     return result
 
 
-async def run_synthesis_review(
-    request_data: dict,
-    compliance_result: dict,
-    clinical_result: dict,
-    coverage_result: dict,
-    cpt_validation: dict | None = None,
-) -> dict:
-    """Public wrapper for the Synthesis Decision Agent.
-
-    Exposed for standalone invocation via /api/agents/synthesis
-    and for evaluation/red-teaming. The orchestrator calls _run_synthesis
-    directly for in-pipeline use.
-    """
-    return await _run_synthesis(
-        request_data=request_data,
-        compliance_result=compliance_result,
-        clinical_result=clinical_result,
-        coverage_result=coverage_result,
-        cpt_validation=cpt_validation,
-    )
-
-
 async def _run_synthesis(
     request_data: dict,
     compliance_result: dict,
@@ -1072,23 +1050,11 @@ async def _run_synthesis(
     coverage_result: dict,
     cpt_validation: dict | None = None,
 ) -> dict:
-    """Run the synthesis agent to produce the final decision.
-
-    This is a lightweight reasoning-only agent (no tools) that reads the
-    reports from all three specialized agents and applies the decision rubric
-    with gate-based evaluation.
-
-    In skills mode, uses SKILL.md discovery from .claude/skills/synthesis-decision/.
-    Dispatches to the hosted synthesis agent container.
-    """
-    return await invoke_hosted_agent(
-        "synthesis-decision-agent",
-        settings.HOSTED_AGENT_SYNTHESIS_URL,
-        {
-            "request": request_data,
-            "compliance_result": compliance_result,
-            "clinical_result": clinical_result,
-            "coverage_result": coverage_result,
-            "cpt_validation": cpt_validation,
-        },
+    """Delegate to the synthesis_agent dispatcher (mirrors clinical/compliance/coverage pattern)."""
+    return await _dispatch_synthesis(
+        request_data=request_data,
+        compliance_result=compliance_result,
+        clinical_result=clinical_result,
+        coverage_result=coverage_result,
+        cpt_validation=cpt_validation,
     )
