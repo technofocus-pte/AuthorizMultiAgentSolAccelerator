@@ -9,10 +9,10 @@ All specialist reasoning runs in four independent Foundry Hosted Agent container
 Frontend (Next.js / ACA)
   └── POST /api/review/stream   (SSE)
         └── FastAPI Backend / Orchestrator (ACA)
-              ├── POST http://agent-clinical/   → Clinical Reviewer Container
-              ├── POST http://agent-compliance/ → Compliance Validation Container
-              ├── POST http://agent-coverage/   → Coverage Assessment Container
-              └── POST http://agent-synthesis/  → Synthesis Decision Container
+              ├── POST http://agent-clinical/responses   → Clinical Reviewer Container
+              ├── POST http://agent-compliance/responses → Compliance Validation Container
+              ├── POST http://agent-coverage/responses   → Coverage Assessment Container
+              └── POST http://agent-synthesis/responses  → Synthesis Decision Container
 ```
 
 Each agent container runs **Microsoft Agent Framework (MAF)** via
@@ -64,26 +64,39 @@ agents/
 
 ---
 
-## Structured Output and Response Normalization
+## Structured Output
 
-The `pydantic_to_output_format()` helper in `backend/app/agents/_parse.py`
-converts a Pydantic schema to a JSON schema dict for validation.
-`parse_json_response()` normalizes the hosted agent HTTP response back
-into the expected dict structure, accepting common payload envelopes:
+Each agent container declares a local Pydantic model in `schemas.py` and
+passes it via MAF's `default_options` parameter:
 
-- `{ "result": { ... } }`
-- `{ "output": { ... } }`
-- `{ "data": { ... } }`
-- `{ ... }` (already-flat payload)
+```python
+agent = (
+    AzureOpenAIResponsesClient(...)
+    .as_agent(
+        tools=[...],
+        default_options={"response_format": ClinicalResult},
+    )
+)
+```
 
-### Parse Resilience
+MAF enforces the schema as a token-level JSON constraint at inference time —
+no post-processing or regex extraction needed. The backend dispatcher reads
+the text payload from the Foundry Responses API envelope:
 
-| Strategy | Method |
-|----------|--------|
-| Primary  | `response.value` / `response.structured_output` |
-| Fallback 1 | Markdown code fence extraction |
-| Fallback 2 | Brace-matched backward extraction |
-| Fallback 3 | First-`{` to last-`}` substring |
+```python
+# hosted_agents.py
+result_text = data["output"][0]["content"][0]["text"]
+return json.loads(result_text)
+```
+
+The Pydantic models live in each agent container:
+
+| Agent | Schema file | Root model |
+|-------|-------------|------------|
+| Clinical | `agents/clinical/schemas.py` | `ClinicalResult` |
+| Compliance | `agents/compliance/schemas.py` | `ComplianceResult` |
+| Coverage | `agents/coverage/schemas.py` | `CoverageResult` |
+| Synthesis | `agents/synthesis/schemas.py` | `SynthesisOutput` |
 
 ---
 

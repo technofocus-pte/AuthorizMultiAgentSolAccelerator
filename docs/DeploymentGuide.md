@@ -4,7 +4,7 @@
 
 This guide walks you through deploying the **Prior Authorization Review — Multi-Agent Solution Accelerator** to Azure. The default deployment takes approximately 10 minutes and provisions the frontend, backend/orchestrator, and Microsoft Foundry project resources.
 
-> **Architecture note:** The project ships with four independent MAF Hosted Agent packages under `agents/` (clinical, coverage, compliance, synthesis). `docker compose up --build` starts all six services locally. For Azure, each agent is deployed as its own Foundry Hosted Agent container; the FastAPI orchestrator calls them over HTTP when `USE_HOSTED_AGENTS=true`.
+> **Architecture note:** The project ships with four independent MAF Hosted Agent packages under `agents/` (clinical, coverage, compliance, synthesis). `docker compose up --build` starts all six services locally. For Azure, each agent is deployed as its own Foundry Hosted Agent container; the FastAPI orchestrator calls them over HTTP.
 
 🆘 **Need Help?** If you encounter any issues during deployment, check our [Troubleshooting Guide](./troubleshooting.md) for solutions to common problems.
 
@@ -171,11 +171,6 @@ The backend uses `backend/.env` and each MAF agent container reads env vars from
 **`backend/.env`** (orchestrator only):
 
 ```env
-# Runtime mode
-# true  = backend calls the 4 hosted agent containers over HTTP (Docker Compose default)
-# false = backend falls back to legacy ClaudeAgent in-process (not recommended)
-USE_HOSTED_AGENTS=true
-
 # Hosted agent endpoints
 # Docker Compose: point to the MAF agent services
 HOSTED_AGENT_CLINICAL_URL=http://agent-clinical:8000
@@ -383,23 +378,18 @@ az containerapp update --name $APP_NAME --resource-group $RG_NAME \
 azd up
 ```
 
-**Optional: switch the deployed backend to hosted-agent mode**
+**Set hosted agent URLs after deploying agent containers:**
 
-After your hosted specialist agents are deployed, set their URLs in the azd
-environment and redeploy or update the Container App configuration:
+After your hosted specialist agents are deployed to Azure, set their URLs in the
+azd environment and redeploy or update the Container App configuration:
 
 ```bash
-azd env set USE_HOSTED_AGENTS true
-azd env set HOSTED_AGENT_COMPLIANCE_URL https://<host>/api/agents/compliance
-azd env set HOSTED_AGENT_CLINICAL_URL https://<host>/api/agents/clinical
-azd env set HOSTED_AGENT_COVERAGE_URL https://<host>/api/agents/coverage
-azd env set HOSTED_AGENT_SYNTHESIS_URL https://<host>/api/agents/synthesis
+azd env set HOSTED_AGENT_COMPLIANCE_URL https://<compliance-agent-fqdn>
+azd env set HOSTED_AGENT_CLINICAL_URL https://<clinical-agent-fqdn>
+azd env set HOSTED_AGENT_COVERAGE_URL https://<coverage-agent-fqdn>
+azd env set HOSTED_AGENT_SYNTHESIS_URL https://<synthesis-agent-fqdn>
 azd env set HOSTED_AGENT_AUTH_TOKEN <token-if-required>
 ```
-
-> **Important:** `USE_HOSTED_AGENTS=true` should only be enabled after all four
-> required hosted endpoints are reachable and return the expected result
-> envelopes.
 
 ### 4.4 Get Application URL
 
@@ -790,7 +780,6 @@ for the backend. Total cold-start time is approximately 30–60 seconds.
 |---------------|----------------------|------------|
 | All 4 agents | `AZURE_AI_PROJECT_ENDPOINT` | Foundry Home tab |
 | All 4 agents | `AZURE_OPENAI_DEPLOYMENT_NAME` | Foundry Deployments |
-| Backend | `USE_HOSTED_AGENTS=true` | Set in `backend/.env` or `docker-compose.yml` |
 | Backend | `HOSTED_AGENT_*_URL` | Auto-set to agent container names in `docker-compose.yml` |
 
 > ⏱️ **Expected Duration:** ~2 minutes for initial build, ~30 seconds for subsequent starts.
@@ -935,7 +924,6 @@ az containerapp create \
     ANTHROPIC_FOUNDRY_API_KEY=<your-api-key> \
     ANTHROPIC_FOUNDRY_BASE_URL=https://<resource-name>.services.ai.azure.com/anthropic \
     CLAUDE_MODEL=claude-sonnet-4-6 \
-    USE_SKILLS=true \
     FRONTEND_ORIGIN=https://prior-auth-frontend.<env-unique-id>.<region>.azurecontainerapps.io
 ```
 
@@ -1010,7 +998,6 @@ All environment variables used by the application, organized by purpose.
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `CLAUDE_MODEL` | No | `claude-sonnet-4-6` | The Claude **deployment name** as shown in the Foundry portal under the **Build** tab → **Deployments**. Must exactly match the name of a model deployed in your Microsoft Foundry resource. Common values: `claude-opus-4-5`, `claude-sonnet-4-6`. |
-| `USE_SKILLS` | No | `true` | When `true`, agents use `SKILL.md` files via MAF native skill discovery. When `false`, agents use inline system prompt instructions. |
 
 ### Application
 
@@ -1029,7 +1016,7 @@ All environment variables used by the application, organized by purpose.
 | `MCP_PUBMED` | No | `https://pubmed.mcp.claude.com/mcp` | PubMed biomedical literature search |
 | `MCP_CLINICAL_TRIALS` | No | `https://mcp.deepsense.ai/clinical_trials/mcp` | ClinicalTrials.gov search |
 
-> **Note:** All DeepSense MCP servers require the header `User-Agent: claude-code/1.0`, which is configured automatically in `backend/app/tools/mcp_config.py`.
+> **Note:** All DeepSense MCP servers require the header `User-Agent: claude-code/1.0`, which is injected automatically via a shared `httpx.AsyncClient` in each agent container's `main.py`.
 
 ### How Variables Flow in Azure Deployment
 

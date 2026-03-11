@@ -6,75 +6,70 @@ The multi-agent pipeline can be extended with additional agent roles (e.g., a
 Pharmacy Benefits agent, Prior Treatment Verification agent, or Financial
 Review agent). Each agent follows a consistent pattern across seven files:
 
-**Step 1 — Agent file** (`backend/app/agents/new_agent.py`):
+**Step 1 — Agent container** (`agents/new-agent/main.py` + `agents/new-agent/schemas.py`):
 
-Create a new agent module with the dual-mode pattern (skills vs prompt):
+Create a new agent container following the same pattern as the four existing agents:
+
+**`agents/new-agent/schemas.py`** — declare the structured output model:
 
 ```python
-import json
+from pydantic import BaseModel
+from typing import Optional
+
+class NewAgentResult(BaseModel):
+    status: str
+    findings: list[str]
+    confidence: int
+    summary: Optional[str] = None
+```
+
+**`agents/new-agent/main.py`** — MAF agent wiring:
+
+```python
+import os
 from pathlib import Path
-from agent_framework_claude import ClaudeAgent
-from app.agents._parse import parse_json_response
-from app.config import settings
-from app.tools.mcp_config import NEW_AGENT_MCP_SERVERS  # if using MCP
+import httpx
+from azure.ai.agentserver.agentframework import AzureOpenAIResponsesClient, from_agent_framework
+from agent_framework import FileAgentSkillsProvider, MCPStreamableHTTPTool
+from .schemas import NewAgentResult
 
-_BACKEND_DIR = str(Path(__file__).resolve().parent.parent.parent)
+# MCP client with required User-Agent (only needed if this agent uses MCP)
+_MCP_HTTP_CLIENT = httpx.AsyncClient(headers={"User-Agent": "claude-code/1.0"})
 
-# Inline prompt for prompt mode (USE_SKILLS=false)
-NEW_AGENT_INSTRUCTIONS = """\
-You are a [Role Name] Agent for prior authorization review.
-...your instructions, output format, rules...
-"""
+new_tool = MCPStreamableHTTPTool(
+    name="new-server",
+    url=os.environ["MCP_NEW_SERVER"],
+    http_client=_MCP_HTTP_CLIENT,
+)  # omit if no MCP
 
-async def create_new_agent() -> ClaudeAgent:
-    if settings.USE_SKILLS:
-        return ClaudeAgent(
-            instructions=(
-                "You are a [Role Name] Agent. "
-                "Use your [skill-name] Skill."
-            ),
-            default_options={
-                "cwd": _BACKEND_DIR,
-                "setting_sources": ["user", "project"],
-                "allowed_tools": [
-                    "Skill",
-                    "mcp__server-name__tool_name",  # if using MCP
-                ],
-                "mcp_servers": NEW_AGENT_MCP_SERVERS,  # if using MCP
-                "permission_mode": "bypassPermissions",
-            },
-        )
-    return ClaudeAgent(
-        instructions=NEW_AGENT_INSTRUCTIONS,
-        default_options={
-            "mcp_servers": NEW_AGENT_MCP_SERVERS,  # if using MCP
-            "permission_mode": "bypassPermissions",
-        },
+skills_provider = FileAgentSkillsProvider(
+    skill_paths=str(Path(__file__).parent / "skills")
+)
+
+agent = (
+    AzureOpenAIResponsesClient(
+        endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
+        model=os.environ["AZURE_OPENAI_DEPLOYMENT"],
+        agent_name="new-agent",
+        skills_provider=skills_provider,
     )
+    .as_agent(
+        tools=[new_tool],                             # omit if no MCP
+        default_options={"response_format": NewAgentResult},
+    )
+)
 
-async def run_new_review(request_data: dict, upstream: dict | None = None) -> dict:
-    agent = await create_new_agent()
-    prompt = f"""Review the following prior authorization request.
-
---- REQUEST ---
-Patient: {request_data.get('patient_name')}
-...build prompt from request_data and any upstream findings...
---- END REQUEST ---
-
-Return your structured JSON assessment."""
-
-    async with agent:
-        response = await agent.run(prompt)
-    return parse_json_response(response)
+app = from_agent_framework(agent).run()
 ```
 
 Key conventions:
-- `create_*()` factory returns a `ClaudeAgent` configured for either mode
-- `run_*()` builds the prompt, executes the agent, and parses JSON output
-- `parse_json_response()` extracts JSON from agent output robustly
-- Agents that need upstream results accept them as an optional dict parameter
+- `schemas.py` declares the Pydantic output model; MAF enforces it at inference time (no JSON parsing needed)
+- `FileAgentSkillsProvider` loads SKILL.md files from the `skills/` subdirectory
+- `MCPStreamableHTTPTool` with a shared `httpx.AsyncClient` injects the `User-Agent` header automatically
+- `from_agent_framework(agent).run()` exposes the agent as a `POST /responses` HTTP endpoint
+- Agents that need upstream results receive them as JSON in the request payload
 
-**Step 2 — SKILL.md** (`backend/.claude/skills/new-agent/SKILL.md`):
+**Step 2 — SKILL.md** (`agents/new-agent/skills/new-agent/SKILL.md`):
 
 ```markdown
 # [Role Name] Skill
@@ -104,15 +99,18 @@ Before completing, verify:
 - Do NOT make final approval/denial decisions (synthesis agent does that)
 ```
 
-**Step 3 — MCP config** (`backend/app/tools/mcp_config.py`):
+**Step 3 — MCP wiring** (`agents/new-agent/main.py`):
 
-If the agent uses MCP servers, create an agent-specific server group:
+If the agent uses MCP servers, add the `MCPStreamableHTTPTool` in `main.py` (already shown in Step 1) and expose the URL via an environment variable:
 
 ```python
-NEW_AGENT_MCP_SERVERS = {
-    "server-name": NEW_SERVER,
-}
+# docker-compose.yml (local)
+new-agent:
+  environment:
+    MCP_NEW_SERVER: https://mcp.example.com/new-server/mcp
 ```
+
+Add the same env var to the Azure Bicep/Container App parameters for production.
 
 **Step 4 — Orchestrator** (`backend/app/agents/orchestrator.py`):
 
@@ -188,72 +186,53 @@ Update `_build_audit_trail()`, `_generate_audit_justification()`, and
 
 | File | Change |
 |------|--------|
-| `agents/new_agent.py` | New file: agent factory + run function |
-| `.claude/skills/new-agent/SKILL.md` | New file: skill instructions |
-| `tools/mcp_config.py` | Add server group (if using MCP) |
-| `agents/orchestrator.py` | Import, phase registration, synthesis prompt, SSE events |
+| `agents/new-agent/main.py` | New file: MAF agent, MCP wiring, `from_agent_framework` |
+| `agents/new-agent/schemas.py` | New file: Pydantic output model |
+| `agents/new-agent/skills/new-agent/SKILL.md` | New file: skill instructions |
+| `agents/new-agent/Dockerfile` | New file: container image |
+| `agents/new-agent/requirements.txt` | New file: `azure-ai-agentserver`, `httpx`, `pydantic` |
+| `docker-compose.yml` | Add new agent container + env vars |
+| `backend/app/config.py` | Add `NEW_AGENT_URL` setting |
+| `backend/app/services/hosted_agents.py` | Add dispatch call for new agent |
+| `backend/app/agents/orchestrator.py` | Import, phase registration, synthesis prompt, SSE events |
 | `frontend/lib/types.ts` | Add agent ID to types |
 | `frontend/components/progress-tracker.tsx` | Render new agent status |
-| `services/audit_pdf.py` | Render new agent data in PDF (optional) |
-
-### Hosted-agent-ready extension guidance
-
-If you want the new role to participate in hosted-agent mode, update the
-backend compatibility layer as well:
-
-1. Add a new hosted endpoint setting in [backend/app/config.py](../backend/app/config.py)
-2. Extend the hosted dispatch service so the orchestrator can call the new role
-3. Keep the hosted response schema aligned with the local `run_*()` output
-4. Preserve the same phase/event naming so the frontend does not need a second runtime-specific path
-
-The safest pattern is to treat the orchestrator contract as the source of truth
-and make both local and hosted implementations conform to it.
+| `backend/app/services/audit_pdf.py` | Render new agent data in PDF (optional) |
 
 ---
 
 ## Add a New MCP Server
 
-Six files need changes:
+MCP is wired **per agent container** — there is no central MCP registry in the backend.
+Four files need changes:
 
-**Step 1 — Configuration** (`backend/app/config.py`):
+**Step 1 — Add `MCPStreamableHTTPTool`** (`agents/<target-agent>/main.py`):
 
 ```python
-class Settings:
-    MCP_CPT_VALIDATOR: str = os.getenv(
-        "MCP_CPT_VALIDATOR", "https://mcp.example.com/cpt-validator/mcp"
+cpt_tool = MCPStreamableHTTPTool(
+    name="cpt-validator",
+    url=os.environ["MCP_CPT_VALIDATOR"],
+    http_client=_MCP_HTTP_CLIENT,          # reuse the shared client
+)
+
+agent = (
+    AzureOpenAIResponsesClient(...)
+    .as_agent(
+        tools=[..., cpt_tool],             # add to existing tools list
+        default_options={"response_format": ClinicalResult},
     )
+)
 ```
 
-**Step 2 — Environment files** (`backend/.env` and `backend/.env.example`):
+**Step 2 — Environment variable** (`docker-compose.yml` and Azure container env):
 
-```bash
-MCP_CPT_VALIDATOR=https://mcp.example.com/cpt-validator/mcp
+```yaml
+clinical-agent:
+  environment:
+    MCP_CPT_VALIDATOR: https://mcp.example.com/cpt-validator/mcp
 ```
 
-**Step 3 — Server registry** (`backend/app/tools/mcp_config.py`):
-
-```python
-CPT_SERVER = {"type": "http", "url": settings.MCP_CPT_VALIDATOR, "headers": _HEADERS}
-
-CLINICAL_MCP_SERVERS = {
-    "icd10-codes": ICD10_SERVER,
-    "pubmed": PUBMED_SERVER,
-    "clinical-trials": TRIALS_SERVER,
-    "cpt-validator": CPT_SERVER,           # new
-}
-```
-
-**Step 4 — Agent allowed tools** (e.g., `backend/app/agents/clinical_agent.py`):
-
-```python
-"allowed_tools": [
-    "Skill",
-    "mcp__cpt-validator__validate_cpt",    # new
-    "mcp__cpt-validator__lookup_cpt",      # new
-],
-```
-
-**Step 5 — SKILL.md**:
+**Step 3 — SKILL.md** (`agents/<target-agent>/skills/<skill-name>/SKILL.md`):
 
 ```markdown
 #### CPT Validator MCP (cpt-validator)
@@ -261,31 +240,29 @@ CLINICAL_MCP_SERVERS = {
 - `mcp__cpt-validator__lookup_cpt(code)` — Get description and RVU value
 ```
 
-**Step 6 — Orchestrator** (only if creating a new agent role).
+**Step 4 — Orchestrator** (only if adding a new agent role).
 
 **Architecture summary:**
 
 ```
-.env                    → URL configuration
-config.py               → Settings class (reads env vars)
-tools/mcp_config.py     → Server-to-agent mapping
-agents/<agent>.py       → Tool allowlist (security boundary)
-.claude/skills/*/SKILL.md → Usage instructions
-agents/orchestrator.py  → Pipeline phases (only if adding a new agent role)
+agnets/<agent>/main.py           → MCPStreamableHTTPTool instantiation
+docker-compose.yml                   → MCP URL env var (local)
+Azure Container App env vars         → MCP URL env var (production)
+agents/<agent>/skills/*/SKILL.md     → Usage instructions for the agent
+backend/app/agents/orchestrator.py   → Pipeline phases (only if adding a new agent role)
 ```
 
 ---
 
 ## Change the Decision Rubric
 
-In **skills mode** (`USE_SKILLS=true`), edit:
-- `backend/.claude/skills/synthesis-decision/SKILL.md`
-- `backend/.claude/references/rubric.md`
+Edit the synthesis agent's SKILL.md:
 
-In **prompt mode** (`USE_SKILLS=false`), edit `SYNTHESIS_INSTRUCTIONS` in
-`orchestrator.py`.
+```
+agents/synthesis/skills/synthesis-decision/SKILL.md
+```
 
-**Important:** Both modes are synced. If you change one, update the other.
+Domain experts can update the gate criteria, confidence weights, and decision thresholds without touching any Python code.
 
 ---
 
@@ -319,9 +296,7 @@ async with mcp_tool:
     result = await mcp_tool.session.call_tool("npi_validate", {"npi": "1234567893"})
 ```
 
-In hosted-agent mode, this MCP wiring typically moves into the hosted agent
-runtime itself; the backend only orchestrates HTTP calls and normalizes the
-returned payloads.
+In the current architecture this MCP wiring lives directly in the agent container's `main.py`; the backend only orchestrates HTTP calls to the `/responses` endpoints.
 
 ---
 

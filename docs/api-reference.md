@@ -219,10 +219,10 @@ contains a regenerated audit PDF with Section 9 ("Clinician Override Record").
 
 ## Per-Agent Endpoints
 
-These endpoints expose each agent individually for hosted-agent deployment,
-per-agent evaluation, red-teaming, and future microservices migration. When
-`USE_HOSTED_AGENTS=true`, the production orchestrator can call equivalent
-hosted endpoints over HTTP while preserving the same result contract.
+These endpoints expose each agent individually for per-agent evaluation,
+red-teaming, integration testing, and future microservices migration.
+The orchestrator calls the equivalent hosted agent containers directly over HTTP
+when running the full pipeline.
 
 All per-agent responses share a common envelope:
 
@@ -234,9 +234,6 @@ All per-agent responses share a common envelope:
   "result": { ... }
 }
 ```
-
-The backend hosted-agent adapter also accepts `output` or `data` in place of
-`result` for compatibility with alternate hosted runtimes.
 
 ### `POST /api/agents/clinical`
 
@@ -312,11 +309,9 @@ Run the **Synthesis Decision Agent** in isolation. Requires all three upstream a
 |---|---|
 | `fastapi` | REST API framework |
 | `uvicorn` | ASGI server |
-| `agent-framework-claude` | Microsoft Agent Framework with Claude SDK |
+| `azure-ai-agentserver` | Microsoft Agent Framework (MAF) SDK |
+| `httpx` | Async HTTP client (backend dispatch + MCP transport in agent containers) |
 | `fpdf2` | PDF generation for notification letters |
-| `pydantic` | Request/response validation |
+| `pydantic` | Request/response validation + structured output models |
 | `react` + `next` | Frontend SPA (Next.js static export) |
 | `shadcn/ui` + `tailwindcss` | UI component library + utility-first CSS |
-
-Note: No `mcp` Python SDK or `httpx` dependency needed — the Claude SDK
-handles MCP communication internally via `McpHttpServerConfig`.

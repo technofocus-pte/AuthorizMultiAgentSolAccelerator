@@ -2,16 +2,11 @@
 
 ## Multi-Agent Architecture
 
-The application now supports a **hosted-agent-ready** runtime model.
+The application uses a **pure HTTP dispatch** architecture. The FastAPI backend has no local AI runtime — all specialist reasoning runs in four independent Foundry Hosted Agent containers.
 
-- **Frontend + backend/orchestrator stay in Azure Container Apps**
-- **Specialist reasoning can run either locally or through hosted Microsoft Foundry agent endpoints**
-- **The backend keeps ownership of SSE progress, review persistence, decision handling, and PDF generation**
-
-Runtime selection is controlled by `USE_HOSTED_AGENTS`:
-
-- `false` — current local/in-process `ClaudeAgent` execution
-- `true` — backend invokes externally hosted agent endpoints over HTTP
+- **Frontend + FastAPI backend/orchestrator run in Azure Container Apps**
+- **Each of the 4 specialist agents is a standalone Foundry Hosted Agent** (independent container, independently scalable)
+- **The backend owns**: SSE progress streaming, review persistence, decision handling, audit PDF generation, and HTTP dispatch to the agent containers
 
 ```
 ┌────────────────────────────────────────────────────────────────────┐
@@ -29,8 +24,8 @@ Runtime selection is controlled by `USE_HOSTED_AGENTS`:
 │ - Audit/PDF generation                                            │
 └───────────────┬───────────────────────────────┬────────────────────┘
                 │                               │
-                │ hosted HTTP agent calls       │ OpenTelemetry
-                │ when USE_HOSTED_AGENTS=true   │
+  POST */responses               │ OpenTelemetry
+  (Foundry Responses API)        │
 ┌───────────────▼───────────────────────────────────────────────┐
 │ Microsoft Foundry Agent Service                               │
 │ - Compliance Agent                                            │
@@ -59,9 +54,11 @@ Runtime selection is controlled by `USE_HOSTED_AGENTS`:
    opening an SSE (Server-Sent Events) connection for real-time progress.
 
 3. The **Orchestrator** runs a pre-flight check and then dispatches the
-    specialist stages. In local mode it executes in-process `ClaudeAgent`
-    instances; in hosted mode it invokes the configured Foundry agent HTTP
-    endpoints while preserving the same downstream response contract.
+    four specialist agents over HTTP via the Foundry Responses API protocol
+    (`POST {agent_url}/responses`). Each agent container runs MAF
+    `from_agent_framework(agent).run()` with `default_options={"response_format": PydanticModel}`
+    for token-level structured output. Results are parsed by `hosted_agents.py`
+    from the Responses API envelope (`output[0].content[0].text`).
 
    **Pre-flight — CPT/HCPCS Format Validation** (`cpt_validation.py`):
    - Validates procedure code format (5-digit CPT or letter+4 HCPCS)
@@ -93,11 +90,11 @@ Runtime selection is controlled by `USE_HOSTED_AGENTS`:
 
 ---
 
-## MCP Integration — No Custom Client Needed
+## MCP Integration — Per-Container MCPStreamableHTTPTool
 
-A key architectural finding: the **Microsoft Agent Framework's Claude SDK**
-natively supports custom HTTP headers on MCP server connections via the
-`McpHttpServerConfig` TypedDict's `headers` field.
+Each agent container wires its MCP servers directly in `main.py` via
+`MCPStreamableHTTPTool` from the Microsoft Agent Framework. The backend has
+**no MCP configuration** — MCP is entirely owned by the agent containers.
 
 ### The User-Agent Requirement
 
@@ -105,55 +102,47 @@ The DeepSense-hosted MCP servers use CloudFront routing that requires `User-Agen
 
 ### How Headers Are Injected
 
-MCP server configs are defined in `mcp_config.py` with the required header:
+MCP tools are created per-agent in each container's `main.py`:
 
 ```python
-# backend/app/tools/mcp_config.py
+# agents/clinical/main.py
 
-_HEADERS = {"User-Agent": "claude-code/1.0"}
-
-NPI_SERVER = {"type": "http", "url": settings.MCP_NPI_REGISTRY, "headers": _HEADERS}
-ICD10_SERVER = {"type": "http", "url": settings.MCP_ICD10_CODES, "headers": _HEADERS}
-CMS_SERVER = {"type": "http", "url": settings.MCP_CMS_COVERAGE, "headers": _HEADERS}
-PUBMED_SERVER = {"type": "http", "url": settings.MCP_PUBMED, "headers": _HEADERS}
-TRIALS_SERVER = {"type": "http", "url": settings.MCP_CLINICAL_TRIALS, "headers": _HEADERS}
-```
-
-These configs are passed to `ClaudeAgent` via `default_options.mcp_servers`:
-
-```python
-# backend/app/agents/clinical_agent.py
-
-agent = ClaudeAgent(
-    instructions=CLINICAL_INSTRUCTIONS,
-    default_options={
-        "mcp_servers": CLINICAL_MCP_SERVERS,
-        "permission_mode": "bypassPermissions",
-    },
-)
-```
-
-### MCP Is Model-Agnostic
-
-MCP servers work with any LLM client, not just Claude. The MS Agent Framework provides
-`MCPStreamableHTTPTool` for custom headers:
-
-```python
 import httpx
-from agent_framework import MCPStreamableHTTPTool
+from azure.ai.agentserver.agentframework import MCPStreamableHTTPTool
 
-http_client = httpx.AsyncClient(headers={"User-Agent": "claude-code/1.0"})
-mcp_tool = MCPStreamableHTTPTool(name="npi", url=NPI_URL, http_client=http_client)
+_MCP_HTTP_CLIENT = httpx.AsyncClient(headers={"User-Agent": "claude-code/1.0"})
+
+icd10_tool = MCPStreamableHTTPTool(
+    name="icd10-codes",
+    url=os.environ["MCP_ICD10_CODES"],
+    http_client=_MCP_HTTP_CLIENT,
+)
+pubmed_tool = MCPStreamableHTTPTool(
+    name="pubmed",
+    url=os.environ["MCP_PUBMED"],
+    http_client=_MCP_HTTP_CLIENT,
+)
+trials_tool = MCPStreamableHTTPTool(
+    name="clinical-trials",
+    url=os.environ["MCP_CLINICAL_TRIALS"],
+    http_client=_MCP_HTTP_CLIENT,
+)
+
+agent = AzureOpenAIResponsesClient(...).as_agent(
+    tools=[icd10_tool, pubmed_tool, trials_tool],
+    default_options={"response_format": ClinicalResult},
+)
+from_agent_framework(agent).run()
 ```
 
 ### Approaches Tested for MCP Header Injection
 
 | Approach | Works? | Notes |
 |---|---|---|
-| `McpHttpServerConfig.headers` in `ClaudeAgentOptions.mcp_servers` | Yes | Cleanest — zero custom code, used in production |
-| `MCPStreamableHTTPTool` + `httpx.AsyncClient` | Yes | Model-agnostic, good for non-Claude agents |
+| `MCPStreamableHTTPTool` + `httpx.AsyncClient` | ✅ | Model-agnostic, used in all 4 agent containers |
+| `McpHttpServerConfig.headers` in `ClaudeAgentOptions.mcp_servers` | Yes | Only for ClaudeAgent (old pattern, not used) |
 | Azure OpenAI Responses API `type: "mcp"` with `headers` | No | Azure proxy doesn't forward `User-Agent` |
-| Custom `MCPClient` with `mcp` Python SDK | Yes | Works but unnecessary — replaced by above |
+| Custom `MCPClient` with `mcp` Python SDK | Yes | Works but unnecessary — replaced by MCPStreamableHTTPTool |
 
 ---
 
@@ -322,42 +311,34 @@ This project consumes **remote MCP servers** from the
 ### How MCP Is Integrated
 
 ```
-mcp_config.py     — Server URL + headers config (User-Agent: claude-code/1.0)
+agents/<name>/main.py     — MCPStreamableHTTPTool instantiation + shared httpx client
     ↓ passed via
-ClaudeAgentOptions.mcp_servers   — Each agent gets its relevant MCP servers
-    ↓ handled by
-Claude Agent SDK  — Auto-discovers tools, manages sessions, invokes tools
+.as_agent(tools=[...])    — MAF wires tools into the agent
+    ↓ hosted by
+from_agent_framework(agent).run()   — Exposes POST /responses; agent calls tools during inference
 ```
 
 ---
 
 ## Skills-Based Architecture
 
-The application supports two modes, controlled by the `USE_SKILLS` environment variable:
+Agent behaviors are defined in SKILL.md files — domain experts can update clinical rules without code changes.
+SKILL.md files live alongside each agent container and are loaded at startup via MAF `FileAgentSkillsProvider`:
 
-| Mode | `USE_SKILLS` | How agents are configured |
-|------|-------------|--------------------------|
-| **Skills-based** (default) | `true` | SKILL.md files via MAF native skill discovery |
-| **Prompt-based** (fallback) | `false` | Inline system prompt instructions |
+```python
+skills_provider = FileAgentSkillsProvider(
+    skill_paths=str(Path(__file__).parent / "skills")
+)
+```
 
 ### Skills Overview
 
 | Skill | Directory | MCP Servers | Purpose |
 |-------|-----------|-------------|---------|
-| Compliance Review | `.claude/skills/compliance-review/` | None | 8-item documentation completeness checklist |
-| Clinical Review | `.claude/skills/clinical-review/` | icd10-codes, pubmed, clinical-trials | Code validation, clinical extraction, literature + trials |
-| Coverage Assessment | `.claude/skills/coverage-assessment/` | npi-registry, cms-coverage | Provider verification, policy search, criteria mapping |
-| Synthesis Decision | `.claude/skills/synthesis-decision/` | None | Gate-based evaluation, weighted confidence, final recommendation |
-
-### Three-Way Comparison
-
-| Aspect | Skills-based (default) | Prompt-based (fallback) | Anthropic skill |
-|--------|----------------------|------------------------|-----------------|
-| Agent configuration | SKILL.md files via MAF discovery | Inline system instructions | SKILL.md via Claude Code Skills API |
-| Token efficiency | Progressive disclosure | Full prompt (~1,200-1,500 tokens per agent) | Progressive disclosure per subskill |
-| Parallelism | Multi-agent, concurrent | Multi-agent, concurrent | Single agent, sequential |
-| Platform | Microsoft Foundry via MAF | Microsoft Foundry via MAF | Claude Code with Skills API |
-| Confidence formula | Explicit weighted (4 components) | Explicit weighted (4 components) | Subjective assessment |
+| Compliance Review | `agents/compliance/skills/compliance-review/` | None | 8-item documentation completeness checklist |
+| Clinical Review | `agents/clinical/skills/clinical-review/` | icd10-codes, pubmed, clinical-trials | Code validation, clinical extraction, literature + trials |
+| Coverage Assessment | `agents/coverage/skills/coverage-assessment/` | npi-registry, cms-coverage | Provider verification, policy search, criteria mapping |
+| Synthesis Decision | `agents/synthesis/skills/synthesis-decision/` | None | Gate-based evaluation, weighted confidence, final recommendation |
 
 ---
 
@@ -368,66 +349,46 @@ prior-auth-maf/
 ├── backend/
 │   ├── .env                              # Environment config (not committed)
 │   ├── requirements.txt                  # Python dependencies
-│   ├── run.py                            # Dev server launcher
-│   ├── .claude/
-│   │   ├── skills/
-│   │   │   ├── compliance-review/SKILL.md
-│   │   │   ├── clinical-review/SKILL.md
-│   │   │   ├── coverage-assessment/SKILL.md
-│   │   │   └── synthesis-decision/SKILL.md
-│   │   └── references/
-│   │       ├── rubric.md                 # Decision policy rubric
-│   │       └── output-formats.md         # JSON output schemas
 │   └── app/
 │       ├── main.py                       # FastAPI app, CORS, router mounts
-│       ├── config.py                     # Settings (API keys, MCP endpoints)
+│       ├── config.py                     # Settings (agent URLs, auth, App Insights)
 │       ├── observability.py              # Azure App Insights + OpenTelemetry
-│       ├── patches/
-│       │   └── __init__.py               # Windows Claude SDK patches
 │       ├── agents/
-│       │   ├── compliance_agent.py       # Compliance Agent (no tools)
-│       │   ├── clinical_agent.py         # Clinical Reviewer Agent (3 MCP servers)
-│       │   ├── coverage_agent.py         # Coverage Agent (2 MCP servers)
-│       │   └── orchestrator.py           # Multi-agent coordinator + synthesis
+│       │   ├── clinical_agent.py         # HTTP dispatcher → Clinical hosted agent
+│       │   ├── compliance_agent.py       # HTTP dispatcher → Compliance hosted agent
+│       │   ├── coverage_agent.py         # HTTP dispatcher → Coverage hosted agent
+│       │   ├── synthesis_agent.py        # HTTP dispatcher → Synthesis hosted agent
+│       │   └── orchestrator.py           # Multi-agent coordinator + audit trail
 │       ├── services/
+│       │   ├── hosted_agents.py          # Foundry Responses API HTTP dispatch layer
 │       │   ├── audit_pdf.py              # Audit justification PDF (fpdf2)
-│       │   ├── cpt_validation.py         # CPT/HCPCS format validation
+│       │   ├── cpt_validation.py         # CPT/HCPCS format validation (pre-flight)
 │       │   └── notification.py           # Notification letters + PDF
-│       ├── tools/
-│       │   └── mcp_config.py             # MCP server configs + headers
 │       ├── models/
-│       │   └── schemas.py                # Pydantic models
+│       │   └── schemas.py                # Pydantic models (single source of truth)
 │       └── routers/
 │           ├── review.py                 # POST /api/review + SSE streaming
-│           └── decision.py               # POST /api/decision
+│           ├── decision.py               # POST /api/decision
+│           └── agents.py                 # Per-agent endpoints /api/agents/*
+│
+├── agents/
+│   ├── clinical/
+│   │   ├── main.py                       # AzureOpenAIResponsesClient + from_agent_framework
+│   │   ├── schemas.py                    # Pydantic output model (ClinicalResult)
+│   │   ├── requirements.txt              # azure-ai-agentserver, httpx, pydantic
+│   │   ├── Dockerfile
+│   │   ├── agent.yaml                    # Foundry Hosted Agent descriptor
+│   │   └── skills/clinical-review/SKILL.md
+│   ├── coverage/                         # (same pattern — CoverageResult)
+│   ├── compliance/                       # (same pattern — ComplianceResult)
+│   └── synthesis/                        # (same pattern — SynthesisOutput)
 │
 ├── frontend/
-│   ├── package.json                      # Next.js 16 + shadcn/ui + Tailwind
-│   ├── app/
-│   │   └── page.tsx                      # Main page (form + dashboard)
-│   ├── components/
-│   │   ├── upload-form.tsx               # PA request form + sample case
-│   │   ├── progress-tracker.tsx          # Real-time agent progress
-│   │   ├── review-dashboard.tsx          # Results + confidence + gaps
-│   │   ├── agent-details.tsx             # Tabbed per-agent breakdown
-│   │   └── decision-panel.tsx            # Accept/Override + PDF download
-│   └── lib/
-│       ├── api.ts                        # Backend API client
-│       ├── types.ts                      # TypeScript types
-│       └── sample-case.ts               # Demo case data
+│   ├── package.json                      # Next.js + shadcn/ui + Tailwind
+│   └── app/, components/, lib/
 │
-├── .devcontainer/                        # Dev Container + setupEnv.sh
-├── .github/                              # Issue & PR templates, workflows, dependabot
 ├── docs/                                 # Supporting documentation
-├── infra/                                # Azure Bicep IaC modules + VS Code Web scaffolding
+├── infra/                                # Azure Bicep IaC modules
 ├── azure.yaml                            # Azure Developer CLI project
-├── docker-compose.yml                    # Two-container local dev
-├── next-steps.md                         # Post azd-init guidance
-├── CODE_OF_CONDUCT.md                    # Microsoft Open Source CoC
-├── CONTRIBUTING.md                       # Contribution guidelines
-├── LICENSE                               # MIT License
-├── SECURITY.md                           # Security reporting
-├── SUPPORT.md                            # Support guidelines
-├── TRANSPARENCY_FAQ.md                   # Responsible AI FAQ
-└── README.md                             # Project overview
+└── docker-compose.yml                    # Local: backend + 4 agents + frontend
 ```

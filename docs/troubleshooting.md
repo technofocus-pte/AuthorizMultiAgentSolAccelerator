@@ -86,21 +86,20 @@ configured to reach it.
 
 ---
 
-## Hosted-agent mode fails immediately
+## Agent phase fails immediately
 
-The review fails as soon as a specialist phase starts after enabling
-`USE_HOSTED_AGENTS=true`.
+The review fails as soon as a specialist phase starts.
 
-**Cause:** One or more hosted endpoint URLs are missing.
+**Cause:** One or more hosted agent endpoint URLs are missing or unreachable.
 
-**Fix:** Verify all required variables are set:
+**Fix:** Verify all required variables are set in `backend/.env`:
 
 - `HOSTED_AGENT_COMPLIANCE_URL`
 - `HOSTED_AGENT_CLINICAL_URL`
 - `HOSTED_AGENT_COVERAGE_URL`
 - `HOSTED_AGENT_SYNTHESIS_URL`
 
-If you are not ready to use hosted endpoints yet, set `USE_HOSTED_AGENTS=false`.
+For local development, make sure `docker-compose.yml` is running all four agent containers and that their ports match the URLs above.
 
 ---
 
@@ -127,15 +126,19 @@ token format required by that deployment.
 The backend reaches the hosted agent, but parsing or downstream validation
 fails.
 
-**Expected payloads:**
+**Expected payload (Foundry Responses API envelope):**
 
-- `{ "result": { ... } }`
-- `{ "output": { ... } }`
-- `{ "data": { ... } }`
-- a flat JSON object containing the final result fields
+```json
+{
+  "output": [{"content": [{"text": "{\"field\": \"value\", ...}"}]}]
+}
+```
 
-**Fix:** Update the hosted agent to return one of the supported envelopes, or
-confirm the payload keys match the corresponding local agent schema.
+The backend reads `output[0].content[0].text` and `json.loads()` the result.
+
+**Fix:** Confirm the agent container is returning the standard Foundry Responses
+API envelope. MAF's `from_agent_framework(agent).run()` produces this format
+automatically.
 
 ---
 
