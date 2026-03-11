@@ -35,6 +35,9 @@ def main() -> None:
         try:
             from azure.monitor.opentelemetry import configure_azure_monitor
             from agent_framework.observability import enable_instrumentation
+            # Sets the cloud role name shown on the Application Map node.
+            # Use setdefault so an explicit OTEL_SERVICE_NAME env var always wins.
+            os.environ.setdefault("OTEL_SERVICE_NAME", "agent-coverage")
             configure_azure_monitor(connection_string=_ai_conn)
             enable_instrumentation()
         except Exception:  # best-effort — never crash the agent

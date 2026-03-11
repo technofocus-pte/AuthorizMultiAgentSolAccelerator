@@ -5,6 +5,7 @@ FastAPI backend to Application Insights.
 """
 
 import logging
+import os
 
 from app.config import settings
 
@@ -31,6 +32,9 @@ def setup_observability() -> None:
     try:
         from azure.monitor.opentelemetry import configure_azure_monitor
 
+        # Sets the cloud role name shown on the Application Map node.
+        # Use setdefault so an explicit OTEL_SERVICE_NAME env var always wins.
+        os.environ.setdefault("OTEL_SERVICE_NAME", "prior-auth-backend")
         configure_azure_monitor(
             connection_string=connection_string,
             enable_live_metrics=True,
