@@ -26,8 +26,6 @@ from app.agents.compliance_agent import run_compliance_review
 from app.agents.clinical_agent import run_clinical_review
 from app.agents.coverage_agent import run_coverage_review
 from app.agents.synthesis_agent import run_synthesis_review as _dispatch_synthesis
-from app.config import settings
-from app.models.schemas import SynthesisOutput
 from app.services.audit_pdf import generate_audit_justification_pdf
 from app.services.cpt_validation import validate_procedure_codes
 
@@ -690,10 +688,6 @@ async def _run_review_pipeline(
         p1_span.set_attribute("agent.clinical.status",
                               "error" if clinical_result.get("error") else "success")
 
-    # Diagnostic: dump agent result keys and sample values for debugging
-    _dump_agent_result("Compliance", compliance_result)
-    _dump_agent_result("Clinical", clinical_result)
-
     # Build per-agent status with validation warnings
     def _agent_status(name: str, result: dict, ok_msg: str) -> dict:
         if result.get("error"):
@@ -742,9 +736,6 @@ async def _run_review_pipeline(
 
         p2_span.set_attribute("agent.coverage.status",
                               "error" if coverage_result.get("error") else "success")
-
-    # Diagnostic: dump coverage agent result
-    _dump_agent_result("Coverage", coverage_result)
 
     await _emit({
         "phase": "phase_2", "status": "completed", "progress_pct": 70,
@@ -934,18 +925,6 @@ async def _run_review_pipeline(
         "audit_justification": audit_justification,
         "audit_justification_pdf": audit_justification_pdf,
     }
-
-
-def _dump_agent_result(agent_name: str, result: dict) -> None:
-    """Diagnostic: save agent raw dict to a temp file for inspection."""
-    try:
-        import tempfile
-        dump_path = Path(tempfile.gettempdir()) / f"agent_raw_{agent_name.lower().replace(' ', '_')}.json"
-        with open(dump_path, "w", encoding="utf-8") as f:
-            json.dump(result, f, indent=2, default=str, ensure_ascii=False)
-        logger.info("[DIAG] Saved %s raw result (%d keys) to %s", agent_name, len(result), dump_path)
-    except Exception as e:
-        logger.warning("[DIAG] Failed to save %s dump: %s", agent_name, e)
 
 
 async def _safe_run(agent_name: str, fn, *args) -> dict:
