@@ -1,8 +1,8 @@
 // ---------------------------------------------------------------------------
 // Prior Auth MAF — Main Bicep template
 // Deploys: Resource Group, Microsoft Foundry (Resource + Project), Container Registry,
-//          Container Apps Environment, Backend + Frontend Container Apps,
-//          Log Analytics, App Insights
+//          Container Apps Environment, Backend + 4 Agent + Frontend Container Apps,
+//          Log Analytics, App Insights, Role Assignments (Cognitive Services OpenAI User)
 // ---------------------------------------------------------------------------
 
 targetScope = 'subscription'
@@ -15,50 +15,35 @@ targetScope = 'subscription'
 param environmentName string
 
 @minLength(1)
-@description('Primary location for all resources. Must be East US 2 or Sweden Central for Claude model availability.')
+@description('Primary location for all resources. Must be East US 2 or Sweden Central for gpt-4o availability.')
 @allowed([
   'eastus2'
   'swedencentral'
 ])
 param location string
 
-@description('Microsoft Foundry API key for Claude model access')
-@secure()
-param azureFoundryApiKey string = ''
-
-@description('Microsoft Foundry endpoint URL')
-param azureFoundryEndpoint string = ''
-
-@description('Claude model name (e.g., claude-sonnet-4-6, claude-opus-4-5)')
-param claudeModel string = 'claude-sonnet-4-6'
-
-@description('Enable backend invocation of externally hosted agents')
-param useHostedAgents string = 'false'
-
-@description('Hosted Compliance Agent URL')
-param hostedAgentComplianceUrl string = ''
-
-@description('Hosted Clinical Agent URL')
-param hostedAgentClinicalUrl string = ''
-
-@description('Hosted Coverage Agent URL')
-param hostedAgentCoverageUrl string = ''
-
-@description('Hosted Synthesis Agent URL')
-param hostedAgentSynthesisUrl string = ''
-
-@description('Header name used when authenticating backend calls to hosted agents')
-param hostedAgentAuthHeader string = 'Authorization'
-
-@description('Auth scheme used when authenticating backend calls to hosted agents')
-param hostedAgentAuthScheme string = 'Bearer'
-
-@description('Optional auth token used when authenticating backend calls to hosted agents')
-@secure()
-param hostedAgentAuthToken string = ''
+@description('Azure OpenAI deployment name to use across all agent containers (e.g., gpt-4o)')
+param azureOpenAIDeploymentName string = 'gpt-4o'
 
 @description('Whether container images have been built to ACR (set automatically by postprovision hook)')
 param imagesBuilt string = ''
+
+// ── MCP Server URL parameters (all have production defaults) ────────────────
+
+@description('ICD-10 diagnosis code validation MCP server URL')
+param mcpIcd10CodesUrl string = 'https://mcp.deepsense.ai/icd10_codes/mcp'
+
+@description('PubMed biomedical literature search MCP server URL')
+param mcpPubmedUrl string = 'https://pubmed.mcp.claude.com/mcp'
+
+@description('ClinicalTrials.gov search MCP server URL')
+param mcpClinicalTrialsUrl string = 'https://mcp.deepsense.ai/clinical_trials/mcp'
+
+@description('NPI Registry provider verification MCP server URL')
+param mcpNpiRegistryUrl string = 'https://mcp.deepsense.ai/npi_registry/mcp'
+
+@description('CMS Coverage Medicare LCD/NCD policy lookup MCP server URL')
+param mcpCmsCoverageUrl string = 'https://mcp.deepsense.ai/cms_coverage/mcp'
 
 // ── Variables ───────────────────────────────────────────────────────────────
 
@@ -127,7 +112,7 @@ module containerAppsEnv './modules/container-apps-env.bicep' = {
   }
 }
 
-// ── Backend Container App ───────────────────────────────────────────────────
+// ── Backend Container App ────────────────────────────────────────────────────────
 
 module backend './modules/container-app.bicep' = {
   name: 'backend'
@@ -142,33 +127,155 @@ module backend './modules/container-app.bicep' = {
     imageName: 'backend'
     targetPort: 8000
     useAcrImage: imagesBuilt == 'true'
-    cpu: '2'
-    memory: '4Gi'
+    cpu: '1'
+    memory: '2Gi'
     minReplicas: 1
     env: [
-      { name: 'CLAUDE_CODE_USE_FOUNDRY', value: 'true' }
-      { name: 'ANTHROPIC_FOUNDRY_API_KEY', secretRef: 'foundry-api-key' }
-      { name: 'ANTHROPIC_FOUNDRY_BASE_URL', value: azureFoundryEndpoint }
-      { name: 'CLAUDE_MODEL', value: claudeModel }
-      { name: 'USE_HOSTED_AGENTS', value: useHostedAgents }
-      { name: 'HOSTED_AGENT_COMPLIANCE_URL', value: hostedAgentComplianceUrl }
-      { name: 'HOSTED_AGENT_CLINICAL_URL', value: hostedAgentClinicalUrl }
-      { name: 'HOSTED_AGENT_COVERAGE_URL', value: hostedAgentCoverageUrl }
-      { name: 'HOSTED_AGENT_SYNTHESIS_URL', value: hostedAgentSynthesisUrl }
-      { name: 'HOSTED_AGENT_AUTH_HEADER', value: hostedAgentAuthHeader }
-      { name: 'HOSTED_AGENT_AUTH_SCHEME', value: hostedAgentAuthScheme }
-      { name: 'HOSTED_AGENT_AUTH_TOKEN', secretRef: 'hosted-agent-auth-token' }
+      // Hosted agent endpoints — point to the 4 agent Container Apps
+      { name: 'HOSTED_AGENT_CLINICAL_URL', value: 'https://${agentClinical.outputs.fqdn}' }
+      { name: 'HOSTED_AGENT_COVERAGE_URL', value: 'https://${agentCoverage.outputs.fqdn}' }
+      { name: 'HOSTED_AGENT_COMPLIANCE_URL', value: 'https://${agentCompliance.outputs.fqdn}' }
+      { name: 'HOSTED_AGENT_SYNTHESIS_URL', value: 'https://${agentSynthesis.outputs.fqdn}' }
+      { name: 'HOSTED_AGENT_TIMEOUT_SECONDS', value: '180' }
       { name: 'APPLICATION_INSIGHTS_CONNECTION_STRING', value: monitoring.outputs.appInsightsConnectionString }
       { name: 'FRONTEND_ORIGIN', value: 'https://${abbrs.appContainerApps}frontend-${resourceToken}.${containerAppsEnv.outputs.defaultDomain}' }
     ]
-    secrets: [
-      { name: 'foundry-api-key', value: azureFoundryApiKey != '' ? azureFoundryApiKey : 'placeholder-configure-after-model-deployment' }
-      { name: 'hosted-agent-auth-token', value: hostedAgentAuthToken }
+    secrets: []
+    healthCheckPath: '/health'
+  }
+}
+// ── Clinical Reviewer Agent Container App ─────────────────────────────
+
+module agentClinical './modules/container-app.bicep' = {
+  name: 'agent-clinical'
+  scope: rg
+  params: {
+    name: '${abbrs.appContainerApps}agent-clinical-${resourceToken}'
+    location: location
+    tags: union(tags, { 'azd-service-name': 'agent-clinical' })
+    containerAppsEnvironmentId: containerAppsEnv.outputs.environmentId
+    containerRegistryName: containerRegistry.outputs.name
+    containerRegistryLoginServer: containerRegistry.outputs.loginServer
+    imageName: 'agent-clinical'
+    targetPort: 8000
+    useAcrImage: imagesBuilt == 'true'
+    cpu: '1'
+    memory: '2Gi'
+    minReplicas: 1
+    env: [
+      { name: 'AZURE_AI_PROJECT_ENDPOINT', value: aiFoundry.outputs.endpoint }
+      { name: 'AZURE_OPENAI_DEPLOYMENT_NAME', value: azureOpenAIDeploymentName }
+      { name: 'MCP_ICD10_CODES', value: mcpIcd10CodesUrl }
+      { name: 'MCP_PUBMED', value: mcpPubmedUrl }
+      { name: 'MCP_CLINICAL_TRIALS', value: mcpClinicalTrialsUrl }
+      { name: 'APPLICATION_INSIGHTS_CONNECTION_STRING', value: monitoring.outputs.appInsightsConnectionString }
     ]
+    secrets: []
     healthCheckPath: '/health'
   }
 }
 
+// ── Coverage Assessment Agent Container App ───────────────────────────
+
+module agentCoverage './modules/container-app.bicep' = {
+  name: 'agent-coverage'
+  scope: rg
+  params: {
+    name: '${abbrs.appContainerApps}agent-coverage-${resourceToken}'
+    location: location
+    tags: union(tags, { 'azd-service-name': 'agent-coverage' })
+    containerAppsEnvironmentId: containerAppsEnv.outputs.environmentId
+    containerRegistryName: containerRegistry.outputs.name
+    containerRegistryLoginServer: containerRegistry.outputs.loginServer
+    imageName: 'agent-coverage'
+    targetPort: 8000
+    useAcrImage: imagesBuilt == 'true'
+    cpu: '1'
+    memory: '2Gi'
+    minReplicas: 1
+    env: [
+      { name: 'AZURE_AI_PROJECT_ENDPOINT', value: aiFoundry.outputs.endpoint }
+      { name: 'AZURE_OPENAI_DEPLOYMENT_NAME', value: azureOpenAIDeploymentName }
+      { name: 'MCP_NPI_REGISTRY', value: mcpNpiRegistryUrl }
+      { name: 'MCP_CMS_COVERAGE', value: mcpCmsCoverageUrl }
+      { name: 'APPLICATION_INSIGHTS_CONNECTION_STRING', value: monitoring.outputs.appInsightsConnectionString }
+    ]
+    secrets: []
+    healthCheckPath: '/health'
+  }
+}
+
+// ── Compliance Validation Agent Container App ─────────────────────────
+
+module agentCompliance './modules/container-app.bicep' = {
+  name: 'agent-compliance'
+  scope: rg
+  params: {
+    name: '${abbrs.appContainerApps}agent-compliance-${resourceToken}'
+    location: location
+    tags: union(tags, { 'azd-service-name': 'agent-compliance' })
+    containerAppsEnvironmentId: containerAppsEnv.outputs.environmentId
+    containerRegistryName: containerRegistry.outputs.name
+    containerRegistryLoginServer: containerRegistry.outputs.loginServer
+    imageName: 'agent-compliance'
+    targetPort: 8000
+    useAcrImage: imagesBuilt == 'true'
+    cpu: '0.5'
+    memory: '1Gi'
+    minReplicas: 1
+    env: [
+      { name: 'AZURE_AI_PROJECT_ENDPOINT', value: aiFoundry.outputs.endpoint }
+      { name: 'AZURE_OPENAI_DEPLOYMENT_NAME', value: azureOpenAIDeploymentName }
+      { name: 'APPLICATION_INSIGHTS_CONNECTION_STRING', value: monitoring.outputs.appInsightsConnectionString }
+    ]
+    secrets: []
+    healthCheckPath: '/health'
+  }
+}
+
+// ── Synthesis Decision Agent Container App ───────────────────────────
+
+module agentSynthesis './modules/container-app.bicep' = {
+  name: 'agent-synthesis'
+  scope: rg
+  params: {
+    name: '${abbrs.appContainerApps}agent-synthesis-${resourceToken}'
+    location: location
+    tags: union(tags, { 'azd-service-name': 'agent-synthesis' })
+    containerAppsEnvironmentId: containerAppsEnv.outputs.environmentId
+    containerRegistryName: containerRegistry.outputs.name
+    containerRegistryLoginServer: containerRegistry.outputs.loginServer
+    imageName: 'agent-synthesis'
+    targetPort: 8000
+    useAcrImage: imagesBuilt == 'true'
+    cpu: '1'
+    memory: '2Gi'
+    minReplicas: 1
+    env: [
+      { name: 'AZURE_AI_PROJECT_ENDPOINT', value: aiFoundry.outputs.endpoint }
+      { name: 'AZURE_OPENAI_DEPLOYMENT_NAME', value: azureOpenAIDeploymentName }
+      { name: 'APPLICATION_INSIGHTS_CONNECTION_STRING', value: monitoring.outputs.appInsightsConnectionString }
+    ]
+    secrets: []
+    healthCheckPath: '/health'
+  }
+}
+
+// ── Role Assignments — agent identities → Foundry OpenAI access ───────────
+
+module agentRoleAssignments './modules/role-assignments.bicep' = {
+  name: 'agent-role-assignments'
+  scope: rg
+  params: {
+    foundryAccountName: aiFoundry.outputs.accountName
+    principalIds: [
+      agentClinical.outputs.principalId
+      agentCoverage.outputs.principalId
+      agentCompliance.outputs.principalId
+      agentSynthesis.outputs.principalId
+    ]
+  }
+}
 // ── Frontend Container App ──────────────────────────────────────────────────
 
 module frontend './modules/container-app.bicep' = {
@@ -201,6 +308,10 @@ output AI_FOUNDRY_ACCOUNT_NAME string = aiFoundry.outputs.accountName
 output AI_FOUNDRY_PROJECT_NAME string = aiFoundry.outputs.projectName
 output AI_FOUNDRY_ENDPOINT string = aiFoundry.outputs.endpoint
 output AI_FOUNDRY_PORTAL_URL string = aiFoundry.outputs.portalUrl
+output AGENT_CLINICAL_CONTAINER_APP_NAME string = agentClinical.outputs.name
+output AGENT_COVERAGE_CONTAINER_APP_NAME string = agentCoverage.outputs.name
+output AGENT_COMPLIANCE_CONTAINER_APP_NAME string = agentCompliance.outputs.name
+output AGENT_SYNTHESIS_CONTAINER_APP_NAME string = agentSynthesis.outputs.name
 output BACKEND_CONTAINER_APP_NAME string = backend.outputs.name
 output FRONTEND_CONTAINER_APP_NAME string = frontend.outputs.name
 output frontendUrl string = frontend.outputs.fqdn

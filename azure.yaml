@@ -275,8 +275,13 @@ hooks:
           Write-Host "   • Container Registry" -ForegroundColor White
           Write-Host "   • Container Apps Environment" -ForegroundColor White
           Write-Host "   • Backend Container App (Python/FastAPI)" -ForegroundColor White
+          Write-Host "   • Agent: Clinical Reviewer (MAF Hosted Agent)" -ForegroundColor White
+          Write-Host "   • Agent: Coverage Assessor (MAF Hosted Agent)" -ForegroundColor White
+          Write-Host "   • Agent: Compliance Validator (MAF Hosted Agent)" -ForegroundColor White
+          Write-Host "   • Agent: Synthesis Decision (MAF Hosted Agent)" -ForegroundColor White
           Write-Host "   • Frontend Container App (Next.js/nginx)" -ForegroundColor White
           Write-Host "   • Log Analytics + Application Insights" -ForegroundColor White
+          Write-Host "   • Role Assignments (Cognitive Services OpenAI User)" -ForegroundColor White
           Write-Host ""
           Write-Host "===============================================================" -ForegroundColor Yellow
 
@@ -523,8 +528,13 @@ hooks:
           printf "   • Container Registry\n"
           printf "   • Container Apps Environment\n"
           printf "   • Backend Container App (Python/FastAPI)\n"
+          printf "   • Agent: Clinical Reviewer (MAF Hosted Agent)\n"
+          printf "   • Agent: Coverage Assessor (MAF Hosted Agent)\n"
+          printf "   • Agent: Compliance Validator (MAF Hosted Agent)\n"
+          printf "   • Agent: Synthesis Decision (MAF Hosted Agent)\n"
           printf "   • Frontend Container App (Next.js/nginx)\n"
           printf "   • Log Analytics + Application Insights\n"
+          printf "   • Role Assignments (Cognitive Services OpenAI User)\n"
           printf "\n${Yellow}===============================================================${NC}\n"
 
           # Ask for confirmation
@@ -549,16 +559,20 @@ hooks:
         Write-Host " BUILDING CONTAINER IMAGES (remote ACR build)" -ForegroundColor Green
         Write-Host "===============================================================" -ForegroundColor Yellow
 
-        $acrEndpoint = azd env get-value AZURE_CONTAINER_REGISTRY_ENDPOINT
-        $acrName     = $acrEndpoint -replace '\.azurecr\.io$', ''
-        $rgName      = azd env get-value AZURE_RESOURCE_GROUP
-        $backendApp  = azd env get-value BACKEND_CONTAINER_APP_NAME
-        $frontendApp = azd env get-value FRONTEND_CONTAINER_APP_NAME
+        $acrEndpoint      = azd env get-value AZURE_CONTAINER_REGISTRY_ENDPOINT
+        $acrName          = $acrEndpoint -replace '\.azurecr\.io$', ''
+        $rgName           = azd env get-value AZURE_RESOURCE_GROUP
+        $backendApp       = azd env get-value BACKEND_CONTAINER_APP_NAME
+        $frontendApp      = azd env get-value FRONTEND_CONTAINER_APP_NAME
+        $agentClinicalApp  = azd env get-value AGENT_CLINICAL_CONTAINER_APP_NAME
+        $agentCoverageApp  = azd env get-value AGENT_COVERAGE_CONTAINER_APP_NAME
+        $agentComplianceApp = azd env get-value AGENT_COMPLIANCE_CONTAINER_APP_NAME
+        $agentSynthesisApp = azd env get-value AGENT_SYNTHESIS_CONTAINER_APP_NAME
 
         Write-Host ""
         Write-Host "  Building backend on ACR ($acrName)..." -ForegroundColor White
         $ErrorActionPreference = 'SilentlyContinue'
-        $backendBuild = az acr build --registry $acrName --image backend:latest --platform linux/amd64 ./backend --no-logs 2>&1
+        az acr build --registry $acrName --image backend:latest --platform linux/amd64 ./backend --no-logs 2>&1 | Out-Null
         $backendExit = $LASTEXITCODE
         $ErrorActionPreference = 'Continue'
         if ($backendExit -ne 0) { Write-Host "  ERROR: Backend build failed!" -ForegroundColor Red; exit 1 }
@@ -566,19 +580,55 @@ hooks:
 
         Write-Host "  Building frontend on ACR ($acrName)..." -ForegroundColor White
         $ErrorActionPreference = 'SilentlyContinue'
-        $frontendBuild = az acr build --registry $acrName --image frontend:latest --platform linux/amd64 ./frontend --no-logs 2>&1
+        az acr build --registry $acrName --image frontend:latest --platform linux/amd64 ./frontend --no-logs 2>&1 | Out-Null
         $frontendExit = $LASTEXITCODE
         $ErrorActionPreference = 'Continue'
         if ($frontendExit -ne 0) { Write-Host "  ERROR: Frontend build failed!" -ForegroundColor Red; exit 1 }
         Write-Host "  Frontend image built successfully" -ForegroundColor Green
 
-        Write-Host ""
-        Write-Host "  Updating backend container app..." -ForegroundColor White
+        Write-Host "  Building agent-clinical on ACR ($acrName)..." -ForegroundColor White
         $ErrorActionPreference = 'SilentlyContinue'
-        az containerapp update --name $backendApp --resource-group $rgName --image "$acrEndpoint/backend:latest" --output none 2>&1 | Out-Null
-        az containerapp update --name $frontendApp --resource-group $rgName --image "$acrEndpoint/frontend:latest" --output none 2>&1 | Out-Null
+        az acr build --registry $acrName --image agent-clinical:latest --platform linux/amd64 ./agents/clinical --no-logs 2>&1 | Out-Null
+        $clinicalExit = $LASTEXITCODE
         $ErrorActionPreference = 'Continue'
-        Write-Host "  Updating frontend container app..." -ForegroundColor White
+        if ($clinicalExit -ne 0) { Write-Host "  ERROR: agent-clinical build failed!" -ForegroundColor Red; exit 1 }
+        Write-Host "  agent-clinical image built successfully" -ForegroundColor Green
+
+        Write-Host "  Building agent-coverage on ACR ($acrName)..." -ForegroundColor White
+        $ErrorActionPreference = 'SilentlyContinue'
+        az acr build --registry $acrName --image agent-coverage:latest --platform linux/amd64 ./agents/coverage --no-logs 2>&1 | Out-Null
+        $coverageExit = $LASTEXITCODE
+        $ErrorActionPreference = 'Continue'
+        if ($coverageExit -ne 0) { Write-Host "  ERROR: agent-coverage build failed!" -ForegroundColor Red; exit 1 }
+        Write-Host "  agent-coverage image built successfully" -ForegroundColor Green
+
+        Write-Host "  Building agent-compliance on ACR ($acrName)..." -ForegroundColor White
+        $ErrorActionPreference = 'SilentlyContinue'
+        az acr build --registry $acrName --image agent-compliance:latest --platform linux/amd64 ./agents/compliance --no-logs 2>&1 | Out-Null
+        $complianceExit = $LASTEXITCODE
+        $ErrorActionPreference = 'Continue'
+        if ($complianceExit -ne 0) { Write-Host "  ERROR: agent-compliance build failed!" -ForegroundColor Red; exit 1 }
+        Write-Host "  agent-compliance image built successfully" -ForegroundColor Green
+
+        Write-Host "  Building agent-synthesis on ACR ($acrName)..." -ForegroundColor White
+        $ErrorActionPreference = 'SilentlyContinue'
+        az acr build --registry $acrName --image agent-synthesis:latest --platform linux/amd64 ./agents/synthesis --no-logs 2>&1 | Out-Null
+        $synthesisExit = $LASTEXITCODE
+        $ErrorActionPreference = 'Continue'
+        if ($synthesisExit -ne 0) { Write-Host "  ERROR: agent-synthesis build failed!" -ForegroundColor Red; exit 1 }
+        Write-Host "  agent-synthesis image built successfully" -ForegroundColor Green
+
+        Write-Host ""
+        Write-Host "  Updating container apps with new images..." -ForegroundColor White
+        $ErrorActionPreference = 'SilentlyContinue'
+        az containerapp update --name $backendApp        --resource-group $rgName --image "$acrEndpoint/backend:latest"          --output none 2>&1 | Out-Null
+        az containerapp update --name $frontendApp       --resource-group $rgName --image "$acrEndpoint/frontend:latest"         --output none 2>&1 | Out-Null
+        az containerapp update --name $agentClinicalApp  --resource-group $rgName --image "$acrEndpoint/agent-clinical:latest"   --output none 2>&1 | Out-Null
+        az containerapp update --name $agentCoverageApp  --resource-group $rgName --image "$acrEndpoint/agent-coverage:latest"   --output none 2>&1 | Out-Null
+        az containerapp update --name $agentComplianceApp --resource-group $rgName --image "$acrEndpoint/agent-compliance:latest" --output none 2>&1 | Out-Null
+        az containerapp update --name $agentSynthesisApp --resource-group $rgName --image "$acrEndpoint/agent-synthesis:latest"  --output none 2>&1 | Out-Null
+        $ErrorActionPreference = 'Continue'
+        Write-Host "  All container apps updated" -ForegroundColor Green
 
         # Mark images as built so subsequent provisions use ACR images directly
         azd env set IMAGES_BUILT true
@@ -589,11 +639,11 @@ hooks:
         Write-Host "===============================================================" -ForegroundColor Yellow
         Write-Host ""
         Write-Host " Next Steps:" -ForegroundColor White
-        Write-Host "  1. Deploy Claude Sonnet 4.6 in Microsoft Foundry portal" -ForegroundColor White
-        Write-Host "  2. Set credentials:" -ForegroundColor White
-        Write-Host "     azd env set AZURE_FOUNDRY_API_KEY <your-api-key>" -ForegroundColor Gray
-        Write-Host "     azd env set AZURE_FOUNDRY_ENDPOINT <your-endpoint>" -ForegroundColor Gray
-        Write-Host "  3. Redeploy: azd up" -ForegroundColor White
+        Write-Host "  1. Deploy gpt-4o in your Microsoft Foundry portal" -ForegroundColor White
+        Write-Host "     (Project > Deployments > Deploy model > gpt-4o)" -ForegroundColor Gray
+        Write-Host "  2. If you used a custom deployment name, update it:" -ForegroundColor White
+        Write-Host "     azd env set AZURE_OPENAI_DEPLOYMENT_NAME <name>" -ForegroundColor Gray
+        Write-Host "     azd up  # redeploy to propagate the new name" -ForegroundColor Gray
         Write-Host ""
         $frontendUrl = azd env get-value frontendUrl
         $backendUrl  = azd env get-value backendUrl
@@ -629,6 +679,10 @@ hooks:
         RG_NAME=$(azd env get-value AZURE_RESOURCE_GROUP)
         BACKEND_APP=$(azd env get-value BACKEND_CONTAINER_APP_NAME)
         FRONTEND_APP=$(azd env get-value FRONTEND_CONTAINER_APP_NAME)
+        AGENT_CLINICAL_APP=$(azd env get-value AGENT_CLINICAL_CONTAINER_APP_NAME)
+        AGENT_COVERAGE_APP=$(azd env get-value AGENT_COVERAGE_CONTAINER_APP_NAME)
+        AGENT_COMPLIANCE_APP=$(azd env get-value AGENT_COMPLIANCE_CONTAINER_APP_NAME)
+        AGENT_SYNTHESIS_APP=$(azd env get-value AGENT_SYNTHESIS_CONTAINER_APP_NAME)
 
         printf "\n${White}  Building backend on ACR (%s)...${NC}\n" "$ACR_NAME"
         az acr build --registry "$ACR_NAME" --image backend:latest --platform linux/amd64 ./backend --no-logs 2>/dev/null
@@ -640,10 +694,34 @@ hooks:
         if [ $? -ne 0 ]; then printf "${Red}  ERROR: Frontend build failed!${NC}\n"; exit 1; fi
         printf "${Green}  Frontend image built successfully${NC}\n"
 
-        printf "\n${White}  Updating backend container app...${NC}\n"
-        az containerapp update --name "$BACKEND_APP" --resource-group "$RG_NAME" --image "$ACR_ENDPOINT/backend:latest" --output none 2>/dev/null
-        printf "${White}  Updating frontend container app...${NC}\n"
-        az containerapp update --name "$FRONTEND_APP" --resource-group "$RG_NAME" --image "$ACR_ENDPOINT/frontend:latest" --output none 2>/dev/null
+        printf "${White}  Building agent-clinical on ACR (%s)...${NC}\n" "$ACR_NAME"
+        az acr build --registry "$ACR_NAME" --image agent-clinical:latest --platform linux/amd64 ./agents/clinical --no-logs 2>/dev/null
+        if [ $? -ne 0 ]; then printf "${Red}  ERROR: agent-clinical build failed!${NC}\n"; exit 1; fi
+        printf "${Green}  agent-clinical image built successfully${NC}\n"
+
+        printf "${White}  Building agent-coverage on ACR (%s)...${NC}\n" "$ACR_NAME"
+        az acr build --registry "$ACR_NAME" --image agent-coverage:latest --platform linux/amd64 ./agents/coverage --no-logs 2>/dev/null
+        if [ $? -ne 0 ]; then printf "${Red}  ERROR: agent-coverage build failed!${NC}\n"; exit 1; fi
+        printf "${Green}  agent-coverage image built successfully${NC}\n"
+
+        printf "${White}  Building agent-compliance on ACR (%s)...${NC}\n" "$ACR_NAME"
+        az acr build --registry "$ACR_NAME" --image agent-compliance:latest --platform linux/amd64 ./agents/compliance --no-logs 2>/dev/null
+        if [ $? -ne 0 ]; then printf "${Red}  ERROR: agent-compliance build failed!${NC}\n"; exit 1; fi
+        printf "${Green}  agent-compliance image built successfully${NC}\n"
+
+        printf "${White}  Building agent-synthesis on ACR (%s)...${NC}\n" "$ACR_NAME"
+        az acr build --registry "$ACR_NAME" --image agent-synthesis:latest --platform linux/amd64 ./agents/synthesis --no-logs 2>/dev/null
+        if [ $? -ne 0 ]; then printf "${Red}  ERROR: agent-synthesis build failed!${NC}\n"; exit 1; fi
+        printf "${Green}  agent-synthesis image built successfully${NC}\n"
+
+        printf "\n${White}  Updating container apps with new images...${NC}\n"
+        az containerapp update --name "$BACKEND_APP"         --resource-group "$RG_NAME" --image "$ACR_ENDPOINT/backend:latest"          --output none 2>/dev/null
+        az containerapp update --name "$FRONTEND_APP"        --resource-group "$RG_NAME" --image "$ACR_ENDPOINT/frontend:latest"         --output none 2>/dev/null
+        az containerapp update --name "$AGENT_CLINICAL_APP"  --resource-group "$RG_NAME" --image "$ACR_ENDPOINT/agent-clinical:latest"   --output none 2>/dev/null
+        az containerapp update --name "$AGENT_COVERAGE_APP"  --resource-group "$RG_NAME" --image "$ACR_ENDPOINT/agent-coverage:latest"   --output none 2>/dev/null
+        az containerapp update --name "$AGENT_COMPLIANCE_APP" --resource-group "$RG_NAME" --image "$ACR_ENDPOINT/agent-compliance:latest" --output none 2>/dev/null
+        az containerapp update --name "$AGENT_SYNTHESIS_APP" --resource-group "$RG_NAME" --image "$ACR_ENDPOINT/agent-synthesis:latest"  --output none 2>/dev/null
+        printf "${Green}  All container apps updated${NC}\n"
 
         azd env set IMAGES_BUILT true
 
@@ -652,11 +730,11 @@ hooks:
         printf "${Green} DEPLOYMENT COMPLETE\n"
         printf "${Yellow}===============================================================${NC}\n\n"
         printf "${White} Next Steps:${NC}\n"
-        printf "  1. Deploy Claude Sonnet 4.6 in Microsoft Foundry portal\n"
-        printf "  2. Set credentials:\n"
-        printf "${Gray}     azd env set AZURE_FOUNDRY_API_KEY <your-api-key>${NC}\n"
-        printf "${Gray}     azd env set AZURE_FOUNDRY_ENDPOINT <your-endpoint>${NC}\n"
-        printf "  3. Redeploy: azd up\n\n"
+        printf "  1. Deploy gpt-4o in your Microsoft Foundry portal\n"
+        printf "     (Project > Deployments > Deploy model > gpt-4o)\n"
+        printf "  2. If you used a custom deployment name, update it:\n"
+        printf "     azd env set AZURE_OPENAI_DEPLOYMENT_NAME <name>\n"
+        printf "     azd up  # redeploy to propagate the new name\n\n"
         FRONTEND_URL=$(azd env get-value frontendUrl)
         BACKEND_URL=$(azd env get-value backendUrl)
         printf "${Yellow} Application URLs:${NC}\n"
@@ -666,6 +744,6 @@ hooks:
         printf "  1. Open the Frontend URL above in your browser\n"
         printf "  2. Click 'Load Sample Case' to populate the form\n"
         printf "  3. Click 'Submit for Review' to start the multi-agent review\n\n"
-        printf "${Gray} Backend Health Check: https://%s/health${NC}\n\n" "$BACKEND_URL"
+        printf " Backend Health Check: https://%s/health\n\n" "$BACKEND_URL"
       shell: sh
       interactive: true

@@ -8,38 +8,8 @@
     "location": {
       "value": "${AZURE_LOCATION}"
     },
-    "azureFoundryApiKey": {
-      "value": "${AZURE_FOUNDRY_API_KEY}"
-    },
-    "azureFoundryEndpoint": {
-      "value": "${AZURE_FOUNDRY_ENDPOINT}"
-    },
-    "claudeModel": {
-      "value": "${CLAUDE_MODEL}"
-    },
-    "useHostedAgents": {
-      "value": "${USE_HOSTED_AGENTS}"
-    },
-    "hostedAgentComplianceUrl": {
-      "value": "${HOSTED_AGENT_COMPLIANCE_URL}"
-    },
-    "hostedAgentClinicalUrl": {
-      "value": "${HOSTED_AGENT_CLINICAL_URL}"
-    },
-    "hostedAgentCoverageUrl": {
-      "value": "${HOSTED_AGENT_COVERAGE_URL}"
-    },
-    "hostedAgentSynthesisUrl": {
-      "value": "${HOSTED_AGENT_SYNTHESIS_URL}"
-    },
-    "hostedAgentAuthHeader": {
-      "value": "${HOSTED_AGENT_AUTH_HEADER}"
-    },
-    "hostedAgentAuthScheme": {
-      "value": "${HOSTED_AGENT_AUTH_SCHEME}"
-    },
-    "hostedAgentAuthToken": {
-      "value": "${HOSTED_AGENT_AUTH_TOKEN}"
+    "azureOpenAIDeploymentName": {
+      "value": "${AZURE_OPENAI_DEPLOYMENT_NAME}"
     },
     "imagesBuilt": {
       "value": "${IMAGES_BUILT}"
