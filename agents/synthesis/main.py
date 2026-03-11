@@ -24,6 +24,17 @@ load_dotenv(override=True)  # override=True required for Foundry-deployed env va
 
 
 def main() -> None:
+    # --- Observability: export MAF spans to App Insights / Foundry portal traces ---
+    _ai_conn = os.environ.get("APPLICATION_INSIGHTS_CONNECTION_STRING")
+    if _ai_conn:
+        try:
+            from azure.monitor.opentelemetry import configure_azure_monitor
+            from agent_framework.observability import enable_instrumentation
+            configure_azure_monitor(connection_string=_ai_conn)
+            enable_instrumentation()
+        except Exception:  # best-effort — never crash the agent
+            pass
+
     # --- No MCP tools — synthesis is pure reasoning over agent outputs ---
 
     # --- Skills from local directory ---
