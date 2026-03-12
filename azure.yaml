@@ -690,33 +690,33 @@ hooks:
         PROJECT_ENDPOINT=$(azd env get-value AI_FOUNDRY_PROJECT_ENDPOINT)
 
         printf "\n${White}  Building backend on ACR (%s)...${NC}\n" "$ACR_NAME"
-        az acr build --registry "$ACR_NAME" --image backend:latest --platform linux/amd64 ./backend --no-logs 2>/dev/null
+        az acr build --registry "$ACR_NAME" --image backend:latest --platform linux/amd64 ./backend --no-logs
         if [ $? -ne 0 ]; then printf "${Red}  ERROR: Backend build failed!${NC}\n"; exit 1; fi
         printf "${Green}  Backend image built successfully${NC}\n"
 
         printf "${White}  Building frontend on ACR (%s)...${NC}\n" "$ACR_NAME"
-        az acr build --registry "$ACR_NAME" --image frontend:latest --platform linux/amd64 ./frontend --no-logs 2>/dev/null
+        az acr build --registry "$ACR_NAME" --image frontend:latest --platform linux/amd64 ./frontend --no-logs
         if [ $? -ne 0 ]; then printf "${Red}  ERROR: Frontend build failed!${NC}\n"; exit 1; fi
         printf "${Green}  Frontend image built successfully${NC}\n"
 
         printf "${White}  Building agent-clinical on ACR (%s)...${NC}\n" "$ACR_NAME"
-        az acr build --registry "$ACR_NAME" --image agent-clinical:latest --platform linux/amd64 ./agents/clinical --no-logs 2>/dev/null
-        if [ $? -ne 0 ]; then printf "${Red}  ERROR: agent-clinical build failed!${NC}\n"; exit 1; fi
+        az acr build --registry "$ACR_NAME" --image agent-clinical:latest --platform linux/amd64 ./agents/clinical --no-logs
+        if [ $? -ne 0 ]; then printf "${Red}  ERROR: agent-clinical build failed! Re-run: az acr build --registry %s --image agent-clinical:latest --platform linux/amd64 ./agents/clinical${NC}\n" "$ACR_NAME"; exit 1; fi
         printf "${Green}  agent-clinical image built successfully${NC}\n"
 
         printf "${White}  Building agent-coverage on ACR (%s)...${NC}\n" "$ACR_NAME"
-        az acr build --registry "$ACR_NAME" --image agent-coverage:latest --platform linux/amd64 ./agents/coverage --no-logs 2>/dev/null
-        if [ $? -ne 0 ]; then printf "${Red}  ERROR: agent-coverage build failed!${NC}\n"; exit 1; fi
+        az acr build --registry "$ACR_NAME" --image agent-coverage:latest --platform linux/amd64 ./agents/coverage --no-logs
+        if [ $? -ne 0 ]; then printf "${Red}  ERROR: agent-coverage build failed! Re-run: az acr build --registry %s --image agent-coverage:latest --platform linux/amd64 ./agents/coverage${NC}\n" "$ACR_NAME"; exit 1; fi
         printf "${Green}  agent-coverage image built successfully${NC}\n"
 
         printf "${White}  Building agent-compliance on ACR (%s)...${NC}\n" "$ACR_NAME"
-        az acr build --registry "$ACR_NAME" --image agent-compliance:latest --platform linux/amd64 ./agents/compliance --no-logs 2>/dev/null
-        if [ $? -ne 0 ]; then printf "${Red}  ERROR: agent-compliance build failed!${NC}\n"; exit 1; fi
+        az acr build --registry "$ACR_NAME" --image agent-compliance:latest --platform linux/amd64 ./agents/compliance --no-logs
+        if [ $? -ne 0 ]; then printf "${Red}  ERROR: agent-compliance build failed! Re-run: az acr build --registry %s --image agent-compliance:latest --platform linux/amd64 ./agents/compliance${NC}\n" "$ACR_NAME"; exit 1; fi
         printf "${Green}  agent-compliance image built successfully${NC}\n"
 
         printf "${White}  Building agent-synthesis on ACR (%s)...${NC}\n" "$ACR_NAME"
-        az acr build --registry "$ACR_NAME" --image agent-synthesis:latest --platform linux/amd64 ./agents/synthesis --no-logs 2>/dev/null
-        if [ $? -ne 0 ]; then printf "${Red}  ERROR: agent-synthesis build failed!${NC}\n"; exit 1; fi
+        az acr build --registry "$ACR_NAME" --image agent-synthesis:latest --platform linux/amd64 ./agents/synthesis --no-logs
+        if [ $? -ne 0 ]; then printf "${Red}  ERROR: agent-synthesis build failed! Re-run: az acr build --registry %s --image agent-synthesis:latest --platform linux/amd64 ./agents/synthesis${NC}\n" "$ACR_NAME"; exit 1; fi
         printf "${Green}  agent-synthesis image built successfully${NC}\n"
 
         printf "\n${White}  Updating container apps with new images...${NC}\n"
