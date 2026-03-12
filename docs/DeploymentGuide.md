@@ -27,7 +27,7 @@ Ensure you have access to an [Azure subscription](https://azure.microsoft.com/fr
 > |-------------------|--------|--------|---------|-------------|
 > | Cognitive Services OpenAI User | Backend Container App managed identity | Foundry account | `role-assignments.bicep` | Lets the FastAPI orchestrator call the Foundry Responses API |
 > | AcrPull | Foundry project managed identity | Container Registry | `role-assignments.bicep` | Lets Foundry pull the 4 agent images when provisioning Hosted Agents |
-> | Azure AI User | Deployer (you, running `azd up`) | Foundry account | postprovision hook (`az role assignment create`) | Lets `register_agents.py` register agents via the Foundry Agent Service API |
+> | Azure AI User | Deployer (you, running `azd up`) | Foundry project | postprovision hook (`az role assignment create`) | Lets `register_agents.py` register agents via the Foundry Agent Service API |
 
 **🔍 How to Check Your Permissions:**
 
