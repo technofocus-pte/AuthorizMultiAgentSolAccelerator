@@ -44,15 +44,15 @@ Ensure you have access to an [Azure subscription](https://azure.microsoft.com/fr
 | [Azure Container Registry](https://learn.microsoft.com/en-us/azure/container-registry/) | Storing Docker images | [Pricing](https://azure.microsoft.com/en-us/pricing/details/container-registry/) |
 | [Azure Application Insights](https://learn.microsoft.com/en-us/azure/azure-monitor/app/app-insights-overview) | Observability and tracing (optional) | [Pricing](https://azure.microsoft.com/en-us/pricing/details/monitor/) |
 
-> **Note:** The Microsoft Foundry Resource and Project are automatically provisioned by `azd up`. The **gpt-5.4** model is deployed from the Foundry model catalog after provisioning (see Step 4.3).
+> **Note:** The Microsoft Foundry Resource, Project, and **gpt-5.4 model deployment** are all provisioned automatically by `azd up` — no manual portal steps required.
 
-**Region Availability:** GPT-5.4 is available via **Standard Global** deployment in Microsoft Foundry — no specific region restriction. You can deploy to any supported Azure region.
+**Region Availability:** GPT-5.4 (DataZone Standard) is currently available in **East US 2** (`eastus2`) and **Sweden Central** (`swedencentral`) only. The pre-flight checks will block deployment to any other region with a clear error message.
 
 🔍 **Model Details:** See [GPT-5.4 in Microsoft Foundry](https://techcommunity.microsoft.com/blog/azure-ai-foundry-blog/introducing-gpt-5-4-in-microsoft-foundry/4499785) for capabilities and pricing.
 
 ### 1.3 GPT-5.4 Model Availability
 
-> **Note:** You do **not** need to create a Foundry project or deploy the gpt-5.4 model before running `azd up`. Everything is provisioned automatically. You will deploy the gpt-5.4 model in [Step 4.3](#43-deploy-gpt-54-model--configure-credentials) after infrastructure provisioning completes.
+> **Note:** You do **not** need to create a Foundry project or deploy the gpt-5.4 model before running `azd up`. Everything — Foundry resource, project, model deployment (DataZone Standard, 100K TPM), all 4 hosted agents, and the full application stack — is provisioned and registered automatically.
 
 ---
 
@@ -259,7 +259,7 @@ The MCP server endpoints are pre-configured with defaults. Override them only if
 
 ### 4.1 Authenticate with Azure
 
-Both `azd` and `az` CLI must be authenticated. The pre-flight checks verify both.
+Both `azd` and `az` CLI must be authenticated. The pre-flight checks in the deployment hooks verify both.
 
 ```bash
 azd auth login
@@ -296,17 +296,17 @@ azd up
 **During deployment, you'll be prompted for:**
 1. **Environment name** (e.g., `prior-auth-dev`) — a label for your deployment, used in the resource group name
 2. **Azure subscription** selection
-3. **Azure region** — select any supported Azure region (gpt-5.4 is available via Standard Global)
-4. **Foundry API key** and **endpoint** — press **Enter** to skip (leave blank). These are configured in Step 4.3 after the Foundry resources are provisioned.
+3. **Azure region** — select **`eastus2`** or **`swedencentral`** (gpt-5.4 DataZone Standard is currently only available in these two regions)
 
-**What gets deployed:**
-- **Microsoft Foundry Resource + Project** (for Azure OpenAI gpt-5.4 deployment)
-- Azure Container Registry (also used for remote image builds — no local Docker required)
+**What gets deployed (fully automated):**
+- **Microsoft Foundry Resource + Project**
+- **gpt-5.4 model deployment** (DataZone Standard, 100K TPM) — no manual portal step
+- **4 Foundry Hosted Agents** registered automatically (clinical, compliance, coverage, synthesis)
+- Azure Container Registry (used for remote image builds — no local Docker required)
 - Azure Container Apps Environment
 - Backend Container App (Python/FastAPI, port 8000, 2 CPU / 4Gi RAM, min 1 replica)
 - Frontend Container App (Next.js/nginx, port 80)
-- Log Analytics workspace
-- Application Insights
+- Log Analytics workspace + Application Insights (linked to Foundry project automatically)
 
 > **Note:** Container images are built remotely on Azure Container Registry, so no local Docker installation is required for deployment. This works on any machine architecture (x86, ARM64) and any OS.
 
@@ -314,72 +314,22 @@ azd up
 
 **⚠️ Deployment Issues:** If you encounter errors or timeouts, check the [Troubleshooting Guide](./troubleshooting.md) for detailed error solutions.
 
-### 4.3 Deploy GPT-5.4 Model & Configure Credentials
+### 4.3 Deployment Complete — No Manual Steps Required
 
-After `azd up` completes, the Microsoft Foundry Resource and Project are provisioned. Now deploy the gpt-5.4 model:
+`azd up` handles everything end-to-end:
 
-**Step 1: Open the Microsoft Foundry Portal**
+| What | How | Status after `azd up` |
+|---|---|---|
+| Foundry Resource + Project | Bicep | ✅ Provisioned |
+| gpt-5.4 model (DataZone Standard, 100K TPM) | Bicep | ✅ Deployed |
+| Container images (backend + 4 agents + frontend) | ACR remote build | ✅ Built & pushed |
+| Container Apps | Bicep | ✅ Running |
+| Foundry Hosted Agents registered | `scripts/register_agents.py` postprovision hook | ✅ Registered |
+| App Insights linked to Foundry project | Bicep connection resource | ✅ Linked |
 
-Go to [ai.azure.com](https://ai.azure.com/) and select the provisioned project (named **"Prior Auth Project"** or `proj-aif-*`). Make sure the **Foundry (new)** toggle is on.
+> **Authentication:** All resources use `DefaultAzureCredential` (managed identity on Azure) — no API keys, no manual credential configuration.
 
-**Step 2: Deploy the GPT-5.4 Model**
-
-1. In the Foundry portal, click the **Discover** tab → select **Models** in the left menu
-2. Search for **gpt-5.4**
-3. Click the model → **Deploy** and follow the prompts (select **Standard Global** deployment type)
-4. Once deployed, note the **deployment name** and the **Project endpoint** from the **Home** tab
-
-📖 **Model Details:** See [GPT-5.4 in Microsoft Foundry](https://techcommunity.microsoft.com/blog/azure-ai-foundry-blog/introducing-gpt-5-4-in-microsoft-foundry/4499785) for capabilities and pricing.
-
-**Step 3: Configure the Backend with GPT-5.4 Credentials**
-
-Set the project endpoint and deployment name in your azd environment:
-
-> **Where to find these values:**
-> 1. Go to [ai.azure.com](https://ai.azure.com/) → select your newly provisioned project
-> 2. On the **Home** tab: copy the **Project endpoint** (e.g., `https://<resource-name>.services.ai.azure.com/api/projects/<project-name>`) → `AZURE_AI_PROJECT_ENDPOINT`
-> 3. Under **Build** tab → **Deployments**: copy the deployment name → `AZURE_OPENAI_DEPLOYMENT_NAME`
-
-```bash
-azd env set AZURE_AI_PROJECT_ENDPOINT https://<resource-name>.services.ai.azure.com/api/projects/<project-name>
-azd env set AZURE_OPENAI_DEPLOYMENT_NAME gpt-5.4    # Must match your deployment name
-```
-
-> **Authentication:** The backend uses `DefaultAzureCredential` (managed identity) — no API key is required.
-
-Then apply the configuration to the deployed backend. You have two options:
-
-**Option A: Quick update (~10 seconds)** — updates the Container App directly without rebuilding images:
-
-```bash
-APP_NAME=$(azd env get-value BACKEND_CONTAINER_APP_NAME)
-RG_NAME=$(azd env get-value AZURE_RESOURCE_GROUP)
-
-# Update project endpoint and deployment name env vars
-az containerapp update --name $APP_NAME --resource-group $RG_NAME \
-  --set-env-vars \
-    AZURE_AI_PROJECT_ENDPOINT=$(azd env get-value AZURE_AI_PROJECT_ENDPOINT) \
-    AZURE_OPENAI_DEPLOYMENT_NAME=$(azd env get-value AZURE_OPENAI_DEPLOYMENT_NAME)
-```
-
-**Option B: Full redeploy (~5 minutes)** — use when you also need to update application code:
-
-```bash
-azd up
-```
-
-**Set hosted agent URLs after deploying agent containers:**
-
-After your hosted specialist agents are deployed to Azure, set their URLs in the
-azd environment and redeploy or update the Container App configuration:
-
-```bash
-azd env set HOSTED_AGENT_COMPLIANCE_URL https://<compliance-agent-fqdn>
-azd env set HOSTED_AGENT_CLINICAL_URL https://<clinical-agent-fqdn>
-azd env set HOSTED_AGENT_COVERAGE_URL https://<coverage-agent-fqdn>
-azd env set HOSTED_AGENT_SYNTHESIS_URL https://<synthesis-agent-fqdn>
-azd env set HOSTED_AGENT_AUTH_TOKEN <token-if-required>
-```
+Once `azd up` finishes, open the **Frontend URL** printed in the deployment output and you are ready to use the application.
 
 ### 4.4 Get Application URL
 
@@ -392,7 +342,7 @@ azd env get-value backendUrl
 
 Or find them in the [Azure Portal](https://portal.azure.com/) under your resource group → Frontend/Backend Container App → **Application Url**.
 
-⚠️ **Important:** Complete [Post-Deployment Steps](#step-5-post-deployment-configuration) before accessing the application.
+> **Ready to use:** After `azd up` completes, open the frontend URL — no post-deployment configuration is required.
 
 ---
 
@@ -521,15 +471,13 @@ The AI Gateway is a free, Foundry-managed feature (backed by Azure API Managemen
 
 #### Step 2: Connect Application Insights to Foundry Project
 
-Application Insights is **not automatically linked** to the Foundry project. This manual connection is required for Foundry Control Plane to display agent traces and diagnostics.
+> **✅ This is done automatically by `azd up`** — the Bicep template creates the AppInsights connection resource on the Foundry project at deploy time. You can verify it in the Foundry portal under **Operate → Admin → your project → Connected resources** — you should already see an `app-insights` entry.
 
+If the connection is missing (e.g. after a failed provision), add it manually:
 1. In the Foundry portal, select **Operate** → **Admin**
 2. Under **All projects**, search for your project
 3. Select the project → **Connected resources** tab
-4. If no **AppInsights** resource is listed, click **Add connection** → **Application Insights**
-5. Select the Application Insights resource created by `azd up` (named `appi-*` in your resource group)
-
-> **Note:** Without this connection, agent traces still flow to Application Insights (visible in Azure Portal), but the Foundry portal won't display them. If you configured Application Insights after registering a custom agent, you need to unregister and re-register the agent.
+4. Click **Add connection** → **Application Insights** → select the `appi-*` resource in your resource group
 
 #### Step 3: Register the Orchestrator Agent
 
