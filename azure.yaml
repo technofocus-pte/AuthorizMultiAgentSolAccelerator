@@ -282,7 +282,7 @@ hooks:
 
           # Ask for confirmation
           $confirm = Read-Host " Proceed with deployment? (Y/n)"
-          if ($confirm -and $confirm -notin @('y', 'Y', 'yes', 'Yes', 'YES', '')) {
+          if ($confirm -and $confirm -notin @('y', 'Y', 'yes', 'Yes', 'YES')) {
             Write-Host ""
             Write-Host " Deployment cancelled by user." -ForegroundColor Yellow
             Write-Host ""
