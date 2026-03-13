@@ -560,10 +560,14 @@ hooks:
         $foundryProjectName = azd env get-value AI_FOUNDRY_PROJECT_NAME
         $projectEndpoint    = azd env get-value AI_FOUNDRY_PROJECT_ENDPOINT
 
+        # Use a unique tag per build so ACA always pulls the fresh image
+        $imageTag = Get-Date -Format 'yyyyMMddHHmmss'
+        Write-Host "  Image tag: $imageTag" -ForegroundColor Gray
+
         Write-Host ""
         Write-Host "  Building backend on ACR ($acrName)..." -ForegroundColor White
         $ErrorActionPreference = 'SilentlyContinue'
-        az acr build --registry $acrName --image backend:latest --platform linux/amd64 ./backend --no-logs 2>&1 | Out-Null
+        az acr build --registry $acrName --image "backend:$imageTag" --platform linux/amd64 ./backend --no-logs 2>&1 | Out-Null
         $backendExit = $LASTEXITCODE
         $ErrorActionPreference = 'Continue'
         if ($backendExit -ne 0) { Write-Host "  ERROR: Backend build failed!" -ForegroundColor Red; exit 1 }
@@ -571,7 +575,7 @@ hooks:
 
         Write-Host "  Building frontend on ACR ($acrName)..." -ForegroundColor White
         $ErrorActionPreference = 'SilentlyContinue'
-        az acr build --registry $acrName --image frontend:latest --platform linux/amd64 ./frontend --no-logs 2>&1 | Out-Null
+        az acr build --registry $acrName --image "frontend:$imageTag" --platform linux/amd64 ./frontend --no-logs 2>&1 | Out-Null
         $frontendExit = $LASTEXITCODE
         $ErrorActionPreference = 'Continue'
         if ($frontendExit -ne 0) { Write-Host "  ERROR: Frontend build failed!" -ForegroundColor Red; exit 1 }
@@ -579,7 +583,7 @@ hooks:
 
         Write-Host "  Building agent-clinical on ACR ($acrName)..." -ForegroundColor White
         $ErrorActionPreference = 'SilentlyContinue'
-        az acr build --registry $acrName --image agent-clinical:latest --platform linux/amd64 ./agents/clinical --no-logs 2>&1 | Out-Null
+        az acr build --registry $acrName --image "agent-clinical:$imageTag" --platform linux/amd64 ./agents/clinical --no-logs 2>&1 | Out-Null
         $clinicalExit = $LASTEXITCODE
         $ErrorActionPreference = 'Continue'
         if ($clinicalExit -ne 0) { Write-Host "  ERROR: agent-clinical build failed!" -ForegroundColor Red; exit 1 }
@@ -587,7 +591,7 @@ hooks:
 
         Write-Host "  Building agent-coverage on ACR ($acrName)..." -ForegroundColor White
         $ErrorActionPreference = 'SilentlyContinue'
-        az acr build --registry $acrName --image agent-coverage:latest --platform linux/amd64 ./agents/coverage --no-logs 2>&1 | Out-Null
+        az acr build --registry $acrName --image "agent-coverage:$imageTag" --platform linux/amd64 ./agents/coverage --no-logs 2>&1 | Out-Null
         $coverageExit = $LASTEXITCODE
         $ErrorActionPreference = 'Continue'
         if ($coverageExit -ne 0) { Write-Host "  ERROR: agent-coverage build failed!" -ForegroundColor Red; exit 1 }
@@ -595,7 +599,7 @@ hooks:
 
         Write-Host "  Building agent-compliance on ACR ($acrName)..." -ForegroundColor White
         $ErrorActionPreference = 'SilentlyContinue'
-        az acr build --registry $acrName --image agent-compliance:latest --platform linux/amd64 ./agents/compliance --no-logs 2>&1 | Out-Null
+        az acr build --registry $acrName --image "agent-compliance:$imageTag" --platform linux/amd64 ./agents/compliance --no-logs 2>&1 | Out-Null
         $complianceExit = $LASTEXITCODE
         $ErrorActionPreference = 'Continue'
         if ($complianceExit -ne 0) { Write-Host "  ERROR: agent-compliance build failed!" -ForegroundColor Red; exit 1 }
@@ -603,7 +607,7 @@ hooks:
 
         Write-Host "  Building agent-synthesis on ACR ($acrName)..." -ForegroundColor White
         $ErrorActionPreference = 'SilentlyContinue'
-        az acr build --registry $acrName --image agent-synthesis:latest --platform linux/amd64 ./agents/synthesis --no-logs 2>&1 | Out-Null
+        az acr build --registry $acrName --image "agent-synthesis:$imageTag" --platform linux/amd64 ./agents/synthesis --no-logs 2>&1 | Out-Null
         $synthesisExit = $LASTEXITCODE
         $ErrorActionPreference = 'Continue'
         if ($synthesisExit -ne 0) { Write-Host "  ERROR: agent-synthesis build failed!" -ForegroundColor Red; exit 1 }
@@ -612,8 +616,8 @@ hooks:
         Write-Host ""
         Write-Host "  Updating container apps with new images..." -ForegroundColor White
         $ErrorActionPreference = 'SilentlyContinue'
-        az containerapp update --name $backendApp  --resource-group $rgName --image "$acrEndpoint/backend:latest"  --output none 2>&1 | Out-Null
-        az containerapp update --name $frontendApp --resource-group $rgName --image "$acrEndpoint/frontend:latest" --output none 2>&1 | Out-Null
+        az containerapp update --name $backendApp  --resource-group $rgName --image "$acrEndpoint/backend:$imageTag"  --output none 2>&1 | Out-Null
+        az containerapp update --name $frontendApp --resource-group $rgName --image "$acrEndpoint/frontend:$imageTag" --output none 2>&1 | Out-Null
         $ErrorActionPreference = 'Continue'
         Write-Host "  Backend and frontend container apps updated" -ForegroundColor Green
 
@@ -645,6 +649,7 @@ hooks:
         $env:AI_FOUNDRY_ACCOUNT_NAME = $foundryAccountName
         $env:AI_FOUNDRY_PROJECT_NAME = $foundryProjectName
         $env:AZURE_OPENAI_DEPLOYMENT_NAME = $deploymentName
+        $env:IMAGE_TAG = $imageTag
         if ($appInsightsCs) { $env:APPLICATION_INSIGHTS_CONNECTION_STRING = $appInsightsCs }
 
         # If the role was newly assigned, retry registration to allow RBAC propagation
@@ -714,39 +719,43 @@ hooks:
         FOUNDRY_PROJECT_NAME=$(azd env get-value AI_FOUNDRY_PROJECT_NAME)
         PROJECT_ENDPOINT=$(azd env get-value AI_FOUNDRY_PROJECT_ENDPOINT)
 
+        # Use a unique tag per build so ACA always pulls the fresh image
+        IMAGE_TAG=$(date -u +%Y%m%d%H%M%S)
+        printf "  ${White}Image tag: %s${NC}\n" "$IMAGE_TAG"
+
         printf "\n${White}  Building backend on ACR (%s)...${NC}\n" "$ACR_NAME"
-        az acr build --registry "$ACR_NAME" --image backend:latest --platform linux/amd64 ./backend --no-logs
+        az acr build --registry "$ACR_NAME" --image "backend:$IMAGE_TAG" --platform linux/amd64 ./backend --no-logs
         if [ $? -ne 0 ]; then printf "${Red}  ERROR: Backend build failed!${NC}\n"; exit 1; fi
         printf "${Green}  Backend image built successfully${NC}\n"
 
         printf "${White}  Building frontend on ACR (%s)...${NC}\n" "$ACR_NAME"
-        az acr build --registry "$ACR_NAME" --image frontend:latest --platform linux/amd64 ./frontend --no-logs
+        az acr build --registry "$ACR_NAME" --image "frontend:$IMAGE_TAG" --platform linux/amd64 ./frontend --no-logs
         if [ $? -ne 0 ]; then printf "${Red}  ERROR: Frontend build failed!${NC}\n"; exit 1; fi
         printf "${Green}  Frontend image built successfully${NC}\n"
 
         printf "${White}  Building agent-clinical on ACR (%s)...${NC}\n" "$ACR_NAME"
-        az acr build --registry "$ACR_NAME" --image agent-clinical:latest --platform linux/amd64 ./agents/clinical --no-logs
-        if [ $? -ne 0 ]; then printf "${Red}  ERROR: agent-clinical build failed! Re-run: az acr build --registry %s --image agent-clinical:latest --platform linux/amd64 ./agents/clinical${NC}\n" "$ACR_NAME"; exit 1; fi
+        az acr build --registry "$ACR_NAME" --image "agent-clinical:$IMAGE_TAG" --platform linux/amd64 ./agents/clinical --no-logs
+        if [ $? -ne 0 ]; then printf "${Red}  ERROR: agent-clinical build failed! Re-run: az acr build --registry %s --image agent-clinical:$IMAGE_TAG --platform linux/amd64 ./agents/clinical${NC}\n" "$ACR_NAME"; exit 1; fi
         printf "${Green}  agent-clinical image built successfully${NC}\n"
 
         printf "${White}  Building agent-coverage on ACR (%s)...${NC}\n" "$ACR_NAME"
-        az acr build --registry "$ACR_NAME" --image agent-coverage:latest --platform linux/amd64 ./agents/coverage --no-logs
-        if [ $? -ne 0 ]; then printf "${Red}  ERROR: agent-coverage build failed! Re-run: az acr build --registry %s --image agent-coverage:latest --platform linux/amd64 ./agents/coverage${NC}\n" "$ACR_NAME"; exit 1; fi
+        az acr build --registry "$ACR_NAME" --image "agent-coverage:$IMAGE_TAG" --platform linux/amd64 ./agents/coverage --no-logs
+        if [ $? -ne 0 ]; then printf "${Red}  ERROR: agent-coverage build failed! Re-run: az acr build --registry %s --image agent-coverage:$IMAGE_TAG --platform linux/amd64 ./agents/coverage${NC}\n" "$ACR_NAME"; exit 1; fi
         printf "${Green}  agent-coverage image built successfully${NC}\n"
 
         printf "${White}  Building agent-compliance on ACR (%s)...${NC}\n" "$ACR_NAME"
-        az acr build --registry "$ACR_NAME" --image agent-compliance:latest --platform linux/amd64 ./agents/compliance --no-logs
-        if [ $? -ne 0 ]; then printf "${Red}  ERROR: agent-compliance build failed! Re-run: az acr build --registry %s --image agent-compliance:latest --platform linux/amd64 ./agents/compliance${NC}\n" "$ACR_NAME"; exit 1; fi
+        az acr build --registry "$ACR_NAME" --image "agent-compliance:$IMAGE_TAG" --platform linux/amd64 ./agents/compliance --no-logs
+        if [ $? -ne 0 ]; then printf "${Red}  ERROR: agent-compliance build failed! Re-run: az acr build --registry %s --image agent-compliance:$IMAGE_TAG --platform linux/amd64 ./agents/compliance${NC}\n" "$ACR_NAME"; exit 1; fi
         printf "${Green}  agent-compliance image built successfully${NC}\n"
 
         printf "${White}  Building agent-synthesis on ACR (%s)...${NC}\n" "$ACR_NAME"
-        az acr build --registry "$ACR_NAME" --image agent-synthesis:latest --platform linux/amd64 ./agents/synthesis --no-logs
-        if [ $? -ne 0 ]; then printf "${Red}  ERROR: agent-synthesis build failed! Re-run: az acr build --registry %s --image agent-synthesis:latest --platform linux/amd64 ./agents/synthesis${NC}\n" "$ACR_NAME"; exit 1; fi
+        az acr build --registry "$ACR_NAME" --image "agent-synthesis:$IMAGE_TAG" --platform linux/amd64 ./agents/synthesis --no-logs
+        if [ $? -ne 0 ]; then printf "${Red}  ERROR: agent-synthesis build failed! Re-run: az acr build --registry %s --image agent-synthesis:$IMAGE_TAG --platform linux/amd64 ./agents/synthesis${NC}\n" "$ACR_NAME"; exit 1; fi
         printf "${Green}  agent-synthesis image built successfully${NC}\n"
 
         printf "\n${White}  Updating container apps with new images...${NC}\n"
-        az containerapp update --name "$BACKEND_APP"  --resource-group "$RG_NAME" --image "$ACR_ENDPOINT/backend:latest"  --output none 2>/dev/null
-        az containerapp update --name "$FRONTEND_APP" --resource-group "$RG_NAME" --image "$ACR_ENDPOINT/frontend:latest" --output none 2>/dev/null
+        az containerapp update --name "$BACKEND_APP"  --resource-group "$RG_NAME" --image "$ACR_ENDPOINT/backend:$IMAGE_TAG"  --output none 2>/dev/null
+        az containerapp update --name "$FRONTEND_APP" --resource-group "$RG_NAME" --image "$ACR_ENDPOINT/frontend:$IMAGE_TAG" --output none 2>/dev/null
         printf "${Green}  Backend and frontend container apps updated${NC}\n"
 
         # Ensure the deployer has "Azure AI User" on the Foundry project.
@@ -775,6 +784,7 @@ hooks:
         export AI_FOUNDRY_ACCOUNT_NAME="$FOUNDRY_ACCOUNT_NAME"
         export AI_FOUNDRY_PROJECT_NAME="$FOUNDRY_PROJECT_NAME"
         export AZURE_OPENAI_DEPLOYMENT_NAME="$DEPLOYMENT_NAME"
+        export IMAGE_TAG="$IMAGE_TAG"
         [ -n "$APP_INSIGHTS_CS" ] && export APPLICATION_INSIGHTS_CONNECTION_STRING="$APP_INSIGHTS_CS"
 
         # If the role was newly assigned, retry registration to allow RBAC propagation

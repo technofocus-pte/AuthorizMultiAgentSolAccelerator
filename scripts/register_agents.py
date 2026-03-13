@@ -19,6 +19,7 @@ Optional environment variables:
   APPLICATION_INSIGHTS_CONNECTION_STRING — For agent observability (passed to agents)
   MCP_ICD10_CODES, MCP_PUBMED, MCP_CLINICAL_TRIALS  — Override MCP URLs for clinical agent
   MCP_NPI_REGISTRY, MCP_CMS_COVERAGE                — Override MCP URLs for coverage agent
+  IMAGE_TAG                                          — ACR image tag (default: latest)
 """
 
 import os
@@ -33,6 +34,7 @@ def run() -> None:
     project_name = os.environ.get("AI_FOUNDRY_PROJECT_NAME", "")
     model_name = os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-5.4")
     app_insights_cs = os.environ.get("APPLICATION_INSIGHTS_CONNECTION_STRING", "")
+    image_tag = os.environ.get("IMAGE_TAG", "latest")
 
     if not project_endpoint:
         print("ERROR: AZURE_AI_PROJECT_ENDPOINT is not set.", file=sys.stderr)
@@ -81,7 +83,7 @@ def run() -> None:
     agents = [
         {
             "name": "clinical-reviewer-agent",
-            "image": f"{acr_endpoint}/agent-clinical:latest",
+            "image": f"{acr_endpoint}/agent-clinical:{image_tag}",
             "cpu": "1",
             "memory": "2Gi",
             "env": {
@@ -95,7 +97,7 @@ def run() -> None:
         },
         {
             "name": "coverage-assessment-agent",
-            "image": f"{acr_endpoint}/agent-coverage:latest",
+            "image": f"{acr_endpoint}/agent-coverage:{image_tag}",
             "cpu": "1",
             "memory": "2Gi",
             "env": {
@@ -108,7 +110,7 @@ def run() -> None:
         },
         {
             "name": "compliance-agent",
-            "image": f"{acr_endpoint}/agent-compliance:latest",
+            "image": f"{acr_endpoint}/agent-compliance:{image_tag}",
             "cpu": "0.5",
             "memory": "1Gi",
             "env": {
@@ -122,7 +124,7 @@ def run() -> None:
         },
         {
             "name": "synthesis-agent",
-            "image": f"{acr_endpoint}/agent-synthesis:latest",
+            "image": f"{acr_endpoint}/agent-synthesis:{image_tag}",
             "cpu": "1",
             "memory": "2Gi",
             "env": {
