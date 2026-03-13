@@ -4,7 +4,7 @@ agent-framework-core>=1.0.0rc2,<=1.0.0rc3
 # See: https://learn.microsoft.com/azure/foundry/agents/concepts/hosted-agents#public-adapter-packages
 azure-ai-agentserver-core>=1.0.0b16
 azure-ai-agentserver-agentframework>=1.0.0b16
-# azure-ai-projects is pulled transitively by agent-framework-core (==2.0.0b4)
+# azure-ai-projects is pulled transitively by agent-framework-core
 # Managed identity / DefaultAzureCredential
 azure-identity>=1.15.0
 # Custom MCP HTTP client (header injection for DeepSense CloudFront)
