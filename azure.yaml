@@ -11,7 +11,7 @@ hooks:
       run: |
         # ── Region Validation ────────────────────────────────────────
         $region = azd env get-value AZURE_LOCATION 2>$null
-        if ($region -and $region -notin @('eastus2', 'swedencentral')) {
+        if ($region -and $region -notin @("eastus2", "swedencentral")) {
           Write-Host "" 
           Write-Host "===============================================================" -ForegroundColor Red
           Write-Host " REGION NOT SUPPORTED" -ForegroundColor Red
@@ -214,34 +214,34 @@ hooks:
           $mlLimit = 50
           Write-Host ""
           Write-Host " Resource Quota Summary ($region):" -ForegroundColor Yellow
-          Write-Host " ┌────────────────────────────────┬────────┬───────────┬────────┐" -ForegroundColor Gray
-          Write-Host " │ Resource                       │ In Use │ Available │ Status │" -ForegroundColor Gray
-          Write-Host " ├────────────────────────────────┼────────┼───────────┼────────┤" -ForegroundColor Gray
+          Write-Host " +--------------------------------+--------+-----------+--------+" -ForegroundColor Gray
+          Write-Host " | Resource                       | In Use | Available | Status |" -ForegroundColor Gray
+          Write-Host " +--------------------------------+--------+-----------+--------+" -ForegroundColor Gray
 
           # Container Apps Environments
           if ($caEnvRemaining -gt 0) {
-            Write-Host " │ Container Apps Environments    │ $($caEnvUsage.ToString().PadLeft(6)) │ $($caEnvRemaining.ToString().PadLeft(6))/$caEnvLimit │  " -ForegroundColor Gray -NoNewline
+            Write-Host " | Container Apps Environments    | $($caEnvUsage.ToString().PadLeft(6)) | $($caEnvRemaining.ToString().PadLeft(6))/$caEnvLimit |  " -ForegroundColor Gray -NoNewline
             Write-Host "OK" -ForegroundColor Green -NoNewline
-            Write-Host "  │" -ForegroundColor Gray
+            Write-Host "  |" -ForegroundColor Gray
           } else {
-            Write-Host " │ Container Apps Environments    │ $($caEnvUsage.ToString().PadLeft(6)) │      0/$caEnvLimit │ " -ForegroundColor Gray -NoNewline
+            Write-Host " | Container Apps Environments    | $($caEnvUsage.ToString().PadLeft(6)) |      0/$caEnvLimit | " -ForegroundColor Gray -NoNewline
             Write-Host "FULL" -ForegroundColor Red -NoNewline
-            Write-Host " │" -ForegroundColor Gray
+            Write-Host " |" -ForegroundColor Gray
           }
 
           # Container Registries
           $acrRemaining = $acrLimit - [int]$acrUsage
-          Write-Host " │ Container Registries           │ $($acrUsage.ToString().PadLeft(6)) │ $($acrRemaining.ToString().PadLeft(6))/$acrLimit │  " -ForegroundColor Gray -NoNewline
+          Write-Host " | Container Registries           | $($acrUsage.ToString().PadLeft(6)) | $($acrRemaining.ToString().PadLeft(6))/$acrLimit |  " -ForegroundColor Gray -NoNewline
           Write-Host "OK" -ForegroundColor Green -NoNewline
-          Write-Host "  │" -ForegroundColor Gray
+          Write-Host "  |" -ForegroundColor Gray
 
           # Foundry Resources
           $mlRemaining = $mlLimit - [int]$mlUsage
-          Write-Host " │ Foundry Resources              │ $($mlUsage.ToString().PadLeft(6)) │ $($mlRemaining.ToString().PadLeft(6))/$mlLimit │  " -ForegroundColor Gray -NoNewline
+          Write-Host " | Foundry Resources              | $($mlUsage.ToString().PadLeft(6)) | $($mlRemaining.ToString().PadLeft(6))/$mlLimit |  " -ForegroundColor Gray -NoNewline
           Write-Host "OK" -ForegroundColor Green -NoNewline
-          Write-Host "  │" -ForegroundColor Gray
+          Write-Host "  |" -ForegroundColor Gray
 
-          Write-Host " └────────────────────────────────┴────────┴───────────┴────────┘" -ForegroundColor Gray
+          Write-Host " +--------------------------------+--------+-----------+--------+" -ForegroundColor Gray
 
           if ($caEnvRemaining -le 0) {
             Write-Host ""
@@ -265,24 +265,24 @@ hooks:
           # Resources to be created
           Write-Host ""
           Write-Host " Resources to be created:" -ForegroundColor Yellow
-          Write-Host "   • Resource Group" -ForegroundColor White
-          Write-Host "   • Microsoft Foundry Resource + Project" -ForegroundColor White
-          Write-Host "   • Container Registry" -ForegroundColor White
-          Write-Host "   • Container Apps Environment" -ForegroundColor White
-          Write-Host "   • Backend Container App (Python/FastAPI)" -ForegroundColor White
-          Write-Host "   • Agent: Clinical Reviewer (MAF Hosted Agent)" -ForegroundColor White
-          Write-Host "   • Agent: Coverage Assessor (MAF Hosted Agent)" -ForegroundColor White
-          Write-Host "   • Agent: Compliance Validator (MAF Hosted Agent)" -ForegroundColor White
-          Write-Host "   • Agent: Synthesis Decision (MAF Hosted Agent)" -ForegroundColor White
-          Write-Host "   • Frontend Container App (Next.js/nginx)" -ForegroundColor White
-          Write-Host "   • Log Analytics + Application Insights" -ForegroundColor White
-          Write-Host "   • Role Assignments (Cognitive Services OpenAI User, AcrPull + Azure AI User via hook)" -ForegroundColor White
+          Write-Host "   - Resource Group" -ForegroundColor White
+          Write-Host "   - Microsoft Foundry Resource + Project" -ForegroundColor White
+          Write-Host "   - Container Registry" -ForegroundColor White
+          Write-Host "   - Container Apps Environment" -ForegroundColor White
+          Write-Host "   - Backend Container App (Python/FastAPI)" -ForegroundColor White
+          Write-Host "   - Agent: Clinical Reviewer (MAF Hosted Agent)" -ForegroundColor White
+          Write-Host "   - Agent: Coverage Assessor (MAF Hosted Agent)" -ForegroundColor White
+          Write-Host "   - Agent: Compliance Validator (MAF Hosted Agent)" -ForegroundColor White
+          Write-Host "   - Agent: Synthesis Decision (MAF Hosted Agent)" -ForegroundColor White
+          Write-Host "   - Frontend Container App (Next.js/nginx)" -ForegroundColor White
+          Write-Host "   - Log Analytics + Application Insights" -ForegroundColor White
+          Write-Host "   - Role Assignments (Cognitive Services OpenAI User, AcrPull + Azure AI User via hook)" -ForegroundColor White
           Write-Host ""
           Write-Host "===============================================================" -ForegroundColor Yellow
 
           # Ask for confirmation
           $confirm = Read-Host " Proceed with deployment? (Y/n)"
-          if ($confirm -and $confirm -notin @('y', 'Y', 'yes', 'Yes', 'YES')) {
+          if ($confirm -and $confirm -notmatch "^(y|yes)$") {
             Write-Host ""
             Write-Host " Deployment cancelled by user." -ForegroundColor Yellow
             Write-Host ""
