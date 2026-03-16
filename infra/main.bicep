@@ -204,5 +204,7 @@ output AI_FOUNDRY_PROJECT_ENDPOINT string = aiFoundry.outputs.projectEndpoint
 output AI_FOUNDRY_PORTAL_URL string = aiFoundry.outputs.portalUrl
 output BACKEND_CONTAINER_APP_NAME string = backend.outputs.name
 output FRONTEND_CONTAINER_APP_NAME string = frontend.outputs.name
+output AZURE_OPENAI_DEPLOYMENT_NAME string = azureOpenAIDeploymentName
+output APPLICATION_INSIGHTS_CONNECTION_STRING string = monitoring.outputs.appInsightsConnectionString
 output frontendUrl string = frontend.outputs.fqdn
 output backendUrl string = backend.outputs.fqdn
