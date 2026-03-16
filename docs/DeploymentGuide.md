@@ -54,7 +54,7 @@ Ensure you have access to an [Azure subscription](https://azure.microsoft.com/fr
 
 > **Note:** The Microsoft Foundry Resource, Project, and **gpt-5.4 model deployment** are all provisioned automatically by `azd up` — no manual portal steps required.
 
-**Region Availability:** GPT-5.4 (DataZone Standard) is currently available in **East US 2** (`eastus2`) and **Sweden Central** (`swedencentral`) only. The pre-flight checks will block deployment to any other region with a clear error message.
+**Region Availability:** GPT-5.4 is currently available in **East US 2** (`eastus2`) and **Sweden Central** (`swedencentral`) only. The pre-flight checks will block deployment to any other region with a clear error message. Sweden Central automatically uses **GlobalStandard**; East US 2 prompts you to choose between **GlobalStandard** and **DataZoneStandard**.
 
 🔍 **Model Details:** See [GPT-5.4 in Microsoft Foundry](https://techcommunity.microsoft.com/blog/azure-ai-foundry-blog/introducing-gpt-5-4-in-microsoft-foundry/4499785) for capabilities and pricing.
 
@@ -303,7 +303,7 @@ azd up
 **During deployment, you'll be prompted for:**
 1. **Environment name** (e.g., `prior-auth-dev`) — a label for your deployment, used in the resource group name
 2. **Azure subscription** selection
-3. **Azure region** — select **`eastus2`** or **`swedencentral`** (gpt-5.4 DataZone Standard is currently only available in these two regions)
+3. **Azure region** — select **`eastus2`** or **`swedencentral`** (gpt-5.4 is currently only available in these two regions). Sweden Central auto-selects GlobalStandard; East US 2 prompts for GlobalStandard or DataZoneStandard
 
 **What gets deployed (fully automated):**
 - **Microsoft Foundry Resource + Project**
