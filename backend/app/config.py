@@ -33,6 +33,8 @@ class Settings:
         "HOSTED_AGENT_SYNTHESIS_NAME", "synthesis-agent"
     )
 
+    HOSTED_AGENT_VERSION: str = os.getenv("HOSTED_AGENT_VERSION", "latest")
+
     HOSTED_AGENT_TIMEOUT_SECONDS: float = float(
         os.getenv("HOSTED_AGENT_TIMEOUT_SECONDS", "180")
     )

@@ -9,7 +9,7 @@ Direct HTTP mode (Docker Compose / local dev):
 
 Foundry Hosted Agents mode (Azure deployment via azd up):
   Triggered when HOSTED_AGENT_*_URL is empty and AZURE_AI_PROJECT_ENDPOINT is set.
-  Calls POST {AZURE_AI_PROJECT_ENDPOINT}/responses with agent_reference routing.
+  Uses AIProjectClient.get_openai_client() → responses.create() with agent_reference.
   Auth uses DefaultAzureCredential — resolves to the backend ACA managed identity.
   Foundry Agent Service routes the request to the named hosted agent deployment.
 """
@@ -24,32 +24,32 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-# ── Foundry credential (lazy-initialised, shared across requests) ─────────────
-try:
-    from azure.identity.aio import DefaultAzureCredential as _AsyncCredential
-
-    _AZURE_IDENTITY_AVAILABLE = True
-except ImportError:
-    _AZURE_IDENTITY_AVAILABLE = False
-    _AsyncCredential = None  # type: ignore[assignment,misc]
-
-_foundry_credential: Any = None
+# ── Foundry OpenAI client (lazy-initialised, shared across requests) ──────────
+_openai_client: Any = None
 
 
-async def _get_foundry_token() -> str:
-    """Acquire a Bearer token for Foundry APIs via DefaultAzureCredential."""
-    if not _AZURE_IDENTITY_AVAILABLE:
+def _get_openai_client() -> Any:
+    """Get or create a cached OpenAI client from the AIProjectClient SDK."""
+    global _openai_client
+    if _openai_client is not None:
+        return _openai_client
+
+    try:
+        from azure.ai.projects import AIProjectClient
+        from azure.identity import DefaultAzureCredential
+    except ImportError:
         raise RuntimeError(
-            "azure-identity package is required for Foundry Hosted Agents mode. "
-            "Install with: pip install azure-identity"
+            "azure-ai-projects and azure-identity are required for Foundry Hosted Agents mode. "
+            "Install with: pip install azure-ai-projects azure-identity"
         )
-    global _foundry_credential
-    if _foundry_credential is None:
-        _foundry_credential = _AsyncCredential()
-    token = await _foundry_credential.get_token(
-        "https://ai.azure.com/.default"
+
+    project_endpoint = settings.AZURE_AI_PROJECT_ENDPOINT.rstrip("/")
+    client = AIProjectClient(
+        endpoint=project_endpoint,
+        credential=DefaultAzureCredential(),
     )
-    return token.token
+    _openai_client = client.get_openai_client()
+    return _openai_client
 
 
 def _build_direct_headers() -> dict[str, str]:
@@ -166,77 +166,66 @@ async def _invoke_direct_http(agent_name: str, url: str, payload: dict) -> dict:
 async def _invoke_foundry_agent(
     agent_name: str, foundry_agent_name: str, payload: dict
 ) -> dict:
-    """Invoke a Foundry Hosted Agent via the Foundry Responses API.
+    """Invoke a Foundry Hosted Agent via the OpenAI SDK responses.create().
 
-    Posts to {AZURE_AI_PROJECT_ENDPOINT}/responses with agent_reference
-    routing so Foundry Agent Service dispatches to the named hosted agent.
-    Authentication uses DefaultAzureCredential which resolves to the backend
-    ACA managed identity on Azure (no secrets required).
+    Uses AIProjectClient.get_openai_client() with agent_reference routing
+    via extra_body. Authentication uses DefaultAzureCredential which resolves
+    to the backend ACA managed identity on Azure (no secrets required).
     """
-    project_endpoint = settings.AZURE_AI_PROJECT_ENDPOINT.rstrip("/")
-    # Foundry routes agent_reference requests through the OpenAI-compatible path.
-    # {project_endpoint}/openai/v1/responses — NOT {project_endpoint}/responses.
-    responses_url = f"{project_endpoint}/openai/v1/responses"
-
-    # Standard Foundry Responses API format with agent_reference routing
-    request_body = {
-        "input": [{"type": "message", "role": "user", "content": json.dumps(payload)}],
-        "agent_reference": {"id": foundry_agent_name, "name": foundry_agent_name, "type": "agent_reference"},
-    }
-
     try:
-        token = await _get_foundry_token()
+        openai_client = _get_openai_client()
     except Exception as exc:
         return {
-            "error": f"Failed to acquire Foundry auth token for {agent_name}: {exc}",
+            "error": f"Failed to initialise Foundry client for {agent_name}: {exc}",
             "tool_results": [],
         }
 
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {token}",
-    }
-
     try:
-        timeout = httpx.Timeout(settings.HOSTED_AGENT_TIMEOUT_SECONDS)
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(responses_url, json=request_body, headers=headers)
-            response.raise_for_status()
-            data = response.json()
-            logger.info(
-                "Foundry Hosted Agent %s (%s) raw response status=%s, keys=%s",
-                agent_name,
-                foundry_agent_name,
-                data.get("status") if isinstance(data, dict) else "N/A",
-                list(data.keys()) if isinstance(data, dict) else "N/A",
+        response = openai_client.responses.create(
+            input=[{"role": "user", "content": json.dumps(payload)}],
+            extra_body={
+                "agent_reference": {
+                    "name": foundry_agent_name,
+                    "version": settings.HOSTED_AGENT_VERSION,
+                    "type": "agent_reference",
+                }
+            },
+        )
+
+        # Convert SDK response to dict for _extract_result
+        data = {
+            "status": response.status,
+            "output": [],
+        }
+        for item in response.output:
+            if hasattr(item, "content"):
+                content_blocks = []
+                for block in item.content:
+                    if hasattr(block, "text"):
+                        content_blocks.append({"type": "text", "text": block.text})
+                data["output"].append({"type": "message", "content": content_blocks})
+
+        logger.info(
+            "Foundry Hosted Agent %s (%s) response status=%s",
+            agent_name, foundry_agent_name, response.status,
+        )
+        result = _extract_result(data)
+        if result.get("error"):
+            logger.warning(
+                "Foundry Hosted Agent %s (%s) extraction error: %s",
+                agent_name, foundry_agent_name, result["error"],
             )
-            result = _extract_result(data)
-            if result.get("error"):
-                logger.warning(
-                    "Foundry Hosted Agent %s (%s) extraction error: %s",
-                    agent_name, foundry_agent_name, result["error"],
-                )
-            else:
-                logger.info(
-                    "Foundry Hosted Agent %s (%s) invocation succeeded",
-                    agent_name,
-                    foundry_agent_name,
-                )
-            return result
-    except httpx.HTTPStatusError as exc:
-        detail = exc.response.text[:500] if exc.response is not None else str(exc)
+        else:
+            logger.info(
+                "Foundry Hosted Agent %s (%s) invocation succeeded",
+                agent_name, foundry_agent_name,
+            )
+        return result
+    except Exception as exc:
+        detail = str(exc)[:500]
         logger.warning("Foundry %s invocation failed: %s", agent_name, detail)
         return {
-            "error": (
-                f"Foundry Hosted Agent {agent_name} call failed "
-                f"({exc.response.status_code}): {detail}"
-            ),
-            "tool_results": [],
-        }
-    except Exception as exc:
-        logger.warning("Foundry %s invocation failed: %s", agent_name, exc)
-        return {
-            "error": f"Foundry Hosted Agent {agent_name} call failed: {exc}",
+            "error": f"Foundry Hosted Agent {agent_name} call failed: {detail}",
             "tool_results": [],
         }
 
