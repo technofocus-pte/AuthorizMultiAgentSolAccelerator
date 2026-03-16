@@ -102,7 +102,7 @@ prior-auth-maf/
 3. The **Orchestrator** runs a pre-flight check and then dispatches the
     four specialist agents. `hosted_agents.py` uses a **two-mode dispatcher**:
     - **Docker Compose (local dev):** direct `POST {HOSTED_AGENT_*_URL}/responses` to each agent container over the Docker bridge network.
-    - **Foundry Hosted Agents (production):** Uses `AIProjectClient.get_openai_client()` → `responses.create()` with `extra_body={"agent_reference": {"name": ..., "type": "agent_reference"}}` and plain string input; authentication via `DefaultAzureCredential` (managed identity); the Foundry Agent Service routes to the correct registered agent.
+    - **Foundry Hosted Agents (production):** Uses `AIProjectClient.get_openai_client()` → `responses.create()` with `extra_body` containing both `agent_reference` for routing and a structured `input` message array matching the `from_agent_framework()` envelope format; authentication via `DefaultAzureCredential` (managed identity); the Foundry Agent Service routes to the correct registered agent.
 
     Each agent container runs MAF
     `from_agent_framework(agent).run()` with `default_options={"response_format": PydanticModel}`
