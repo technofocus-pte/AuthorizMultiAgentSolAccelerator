@@ -182,11 +182,11 @@ async def _invoke_foundry_agent(
         }
 
     try:
-        # responses.create() is synchronous — run in a thread to avoid blocking
-        # the FastAPI async event loop
+        # Foundry agent_reference routing requires input as a plain string
+        # (not an array of message objects) for the content to reach the agent
         response = await asyncio.to_thread(
             openai_client.responses.create,
-            input=[{"role": "user", "content": json.dumps(payload)}],
+            input=json.dumps(payload),
             extra_body={
                 "agent_reference": {
                     "name": foundry_agent_name,
