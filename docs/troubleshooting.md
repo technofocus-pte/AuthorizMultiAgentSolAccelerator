@@ -159,7 +159,7 @@ fails.
 }
 ```
 
-The backend reads `output[0].content[0].text` and `json.loads()` the result.
+The backend uses `response.output_text` from the OpenAI SDK and parses the JSON result directly.
 
 **Fix:** Confirm the agent container is returning the standard Foundry Responses
 API envelope. MAF's `from_agent_framework(agent).run()` produces this format

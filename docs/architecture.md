@@ -102,12 +102,12 @@ prior-auth-maf/
 3. The **Orchestrator** runs a pre-flight check and then dispatches the
     four specialist agents. `hosted_agents.py` uses a **two-mode dispatcher**:
     - **Docker Compose (local dev):** direct `POST {HOSTED_AGENT_*_URL}/responses` to each agent container over the Docker bridge network.
-    - **Foundry Hosted Agents (production):** `POST {AZURE_AI_PROJECT_ENDPOINT}/responses` with `agent_reference: {name, type: "agent_framework"}` and a Bearer token from `DefaultAzureCredential`; the Foundry Agent Service routes to the correct registered agent.
+    - **Foundry Hosted Agents (production):** Uses `AIProjectClient.get_openai_client()` → `responses.create()` with `extra_body={"agent_reference": {"name": ..., "type": "agent_reference"}}` and plain string input; authentication via `DefaultAzureCredential` (managed identity); the Foundry Agent Service routes to the correct registered agent.
 
     Each agent container runs MAF
     `from_agent_framework(agent).run()` with `default_options={"response_format": PydanticModel}`
-    for token-level structured output. Results are parsed by `hosted_agents.py`
-    from the Responses API envelope (`output[0].content[0].text`).
+    for token-level structured output. Results are parsed from `response.output_text`
+    as JSON.
 
    **Pre-flight — CPT/HCPCS Format Validation** (`cpt_validation.py`):
    - Validates procedure code format (5-digit CPT or letter+4 HCPCS)
