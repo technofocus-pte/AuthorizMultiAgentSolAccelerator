@@ -16,7 +16,7 @@ Frontend (Next.js / ACA)
               │
               └─── [Foundry Hosted Agents — production (azd up)] ──────────────────
                    POST {AZURE_AI_PROJECT_ENDPOINT}/responses
-                   with  agent_reference: {name, type: "agent_framework"}
+                   with  agent_reference: {name, type: "agent_reference"}
                          Authorization: Bearer <DefaultAzureCredential>
                    → Foundry Agent Service → registered agent containers
 ```
@@ -306,10 +306,12 @@ The following RBAC roles are automatically assigned during `azd up`:
 |----------|---------------|-----------|------------------|-------------|
 | Cognitive Services OpenAI User | Backend Container App managed identity | Foundry account | `role-assignments.bicep` (provision) | Orchestrator calls Foundry Responses API with `agent_reference` routing |
 | AcrPull | Foundry project managed identity | Container Registry | `role-assignments.bicep` (provision) | Foundry Agent Service pulls agent container images from ACR |
+| Cognitive Services OpenAI Contributor | Foundry project managed identity | Foundry account | `role-assignments.bicep` (provision) | Hosted agent containers call gpt-5.4 via the Responses API |
+| Azure AI User | Foundry project managed identity | Foundry account | `role-assignments.bicep` (provision) | Hosted agent containers use Foundry Agent Service data actions |
 | Azure AI User | Deployer (user running `azd up`) | Foundry project | `az role assignment create` (postprovision hook) | `register_agents.py` registers agents via Foundry Agent Service API |
 | Azure AI User | Backend Container App managed identity | Foundry project | `az role assignment create` (postprovision hook) | Backend calls Foundry Hosted Agents at runtime via `DefaultAzureCredential` |
 
-The first two roles are assigned by `infra/modules/role-assignments.bicep` during `azd provision`. The Azure AI User roles are assigned via `az role assignment create` in the postprovision hook — this is intentionally outside Bicep because the CLI command is natively idempotent (no error if the role was previously granted manually).
+The first four roles are assigned by `infra/modules/role-assignments.bicep` during `azd provision`. The remaining Azure AI User roles are assigned via `az role assignment create` in the postprovision hook — this is intentionally outside Bicep because the CLI command is natively idempotent (no error if the role was previously granted manually).
 
 > **First-run note:** Azure RBAC propagation can take up to several minutes after a new role assignment. On the very first `azd up` (when the Azure AI User role is newly created), the postprovision hook automatically retries `register_agents.py` every 10 seconds (up to 12 attempts) until the permission propagates. On subsequent runs the role already exists and no retries are needed.
 
