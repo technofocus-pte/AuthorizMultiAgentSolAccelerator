@@ -31,13 +31,15 @@ git pull
 
 set -e
 
-# Ensure azd is available (fallback if Dev Container Feature failed)
+# Ensure azd is available and up to date
 if ! command -v azd >/dev/null 2>&1 || ! azd version >/dev/null 2>&1; then
   echo "Installing Azure Developer CLI (azd)..."
   curl -fsSL https://aka.ms/install-azd.sh | bash
   echo "azd installed: $(azd version)"
 else
-  echo "azd already available: $(azd version)"
+  echo "Upgrading azd to latest..."
+  curl -fsSL https://aka.ms/install-azd.sh | bash
+  echo "azd version: $(azd version)"
 fi
 
 echo "Upgrading Azure CLI to latest..."
