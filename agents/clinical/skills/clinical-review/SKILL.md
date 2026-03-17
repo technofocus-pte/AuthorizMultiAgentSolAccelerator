@@ -38,7 +38,7 @@ and structure the clinical narrative for downstream coverage assessment.
   Useful for finding all procedures related to an anatomical system.
 
 #### PubMed MCP (pubmed)
-- `search(query, max_results)` — Search biomedical literature for evidence
+- `search_articles(query, max_results)` — Search biomedical literature for evidence
   supporting medical necessity and treatment approach.
 
 #### Clinical Trials MCP (clinical-trials)
@@ -111,7 +111,7 @@ in the clinical_summary.
 #### Step 5: Search Literature (if applicable)
 
 If the clinical scenario is complex or the treatment is non-standard:
-- Use PubMed `search` to find evidence supporting medical necessity
+- Use PubMed `search_articles` to find evidence supporting medical necessity
 - Focus on systematic reviews, meta-analyses, and clinical guidelines
 - Limit to 3-5 most relevant results
 
