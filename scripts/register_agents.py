@@ -152,6 +152,11 @@ def run() -> None:
     subscription_id = os.environ.get("AZURE_SUBSCRIPTION_ID", "")
     resource_group = os.environ.get("AZURE_RESOURCE_GROUP", "")
 
+    if app_insights_cs:
+        print(f"  App Insights: connection string set (len={len(app_insights_cs)})")
+    else:
+        print("  App Insights: CONNECTION STRING NOT SET — agent observability will be disabled")
+
     if not project_endpoint:
         print("ERROR: AZURE_AI_PROJECT_ENDPOINT is not set.", file=sys.stderr)
         sys.exit(1)
