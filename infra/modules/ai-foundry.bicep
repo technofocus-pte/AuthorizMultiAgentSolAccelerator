@@ -75,7 +75,7 @@ resource foundryProject 'Microsoft.CognitiveServices/accounts/projects@2025-06-0
 // Without this, the Foundry portal Traces tab shows nothing even though agent
 // spans are correctly exported to App Insights by client-side instrumentation.
 
-resource appInsightsConnection 'Microsoft.CognitiveServices/accounts/projects/connections@2025-10-01-preview' = {
+resource appInsightsConnection 'Microsoft.CognitiveServices/accounts/projects/connections@2025-12-01' = {
   name: 'app-insights'
   parent: foundryProject
   properties: {
@@ -112,8 +112,12 @@ resource modelDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-
 // ── Capability Host — required for Foundry Hosted Agents ─────────────────────
 // Enables Foundry Agent Service to provision and manage ACA containers for
 // hosted agents deployed to this Foundry account. Must be created once per
-// Foundry account with enablePublicHostingEnvironment=true.
-resource capabilityHost 'Microsoft.CognitiveServices/accounts/capabilityHosts@2025-10-01-preview' = {
+// Foundry account.
+// Using stable 2025-12-01 API. The preview 2025-10-01-preview version has a
+// bug where enablePublicHostingEnvironment=true incorrectly triggers VNet
+// validation, causing CapabilityHostOperationFailed. The GA API handles the
+// property correctly with no VNet required.
+resource capabilityHost 'Microsoft.CognitiveServices/accounts/capabilityHosts@2025-12-01' = {
   name: 'accountcaphost'
   parent: foundryAccount
   properties: {
