@@ -37,7 +37,7 @@ param deploymentCapacityK int = 100
 
 // ── Microsoft Foundry Resource ──────────────────────────────────────────────
 
-resource foundryAccount 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
+resource foundryAccount 'Microsoft.CognitiveServices/accounts@2025-12-01' = {
   name: 'foundry-${name}'
   location: location
   tags: tags
@@ -58,7 +58,7 @@ resource foundryAccount 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
 
 // ── Microsoft Foundry Project ───────────────────────────────────────────────
 
-resource foundryProject 'Microsoft.CognitiveServices/accounts/projects@2025-06-01' = {
+resource foundryProject 'Microsoft.CognitiveServices/accounts/projects@2025-12-01' = {
   name: 'proj-${name}'
   parent: foundryAccount
   location: location
@@ -92,7 +92,7 @@ resource appInsightsConnection 'Microsoft.CognitiveServices/accounts/projects/co
 // DataZoneStandard = data residency bounded to a geographic zone (US/EU),
 //                    available in East US 2 only (NOT Sweden Central).
 // Deployment SKU is selected by the user during azd up.
-resource modelDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01' = {
+resource modelDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-12-01' = {
   name: deploymentName
   parent: foundryAccount
   sku: {
@@ -116,7 +116,7 @@ resource modelDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-
 // Note: enablePublicHostingEnvironment is not supported in stable API versions.
 // Using 2025-06-01 without the property provisions the capability host correctly
 // for public (non-VNet) deployments.
-resource capabilityHost 'Microsoft.CognitiveServices/accounts/capabilityHosts@2025-06-01' = {
+resource capabilityHost 'Microsoft.CognitiveServices/accounts/capabilityHosts@2025-12-01' = {
   name: 'accountcaphost'
   parent: foundryAccount
   properties: {
