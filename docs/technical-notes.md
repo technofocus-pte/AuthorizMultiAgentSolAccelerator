@@ -30,18 +30,22 @@ endpoint, and is registered with **Microsoft Foundry** as a Hosted Agent via
 
 ## MCP Tool Connections
 
-MCP tools use a **hybrid wiring** strategy:
+Each agent's `main.py` creates `MCPStreamableHTTPTool` instances with a shared
+`httpx.AsyncClient` (including `User-Agent: claude-code/1.0` for DeepSense
+CloudFront routing). Tools are passed via `tools=[...]` to `.as_agent()` and
+called directly during inference.
 
-1. **In-container wiring** — each agent's `main.py` creates `MCPStreamableHTTPTool`
-   instances with a shared `httpx.AsyncClient` (including `User-Agent: claude-code/1.0`
-   for DeepSense CloudFront routing). Tools are passed via `tools=[...]` to `.as_agent()`
-   and called directly during inference.
-2. **Foundry project connections** — `scripts/register_agents.py` also registers `MCPTool`
-   references as Foundry project-level tool connections for portal visibility and proxy
-   routing.
+> **Note:** `scripts/register_agents.py` creates Foundry project connections
+> for portal visibility (**Build → Tools**), but `MCPTool` definitions on
+> `HostedAgentDefinition` are disabled (`tools=[]`) because the Foundry
+> `tools/resolve` API is not GA in all regions.
 
-This dual approach ensures agents work in both Docker Compose (direct HTTP) and
-Foundry Hosted Agent (managed proxy) modes.
+### PubMed Session Reconnect
+
+PubMed's MCP server terminates idle sessions after ~10 minutes. The clinical
+agent uses `_ReconnectingMCPTool` — a subclass of `MCPStreamableHTTPTool` that
+catches `McpError('Session terminated')` and auto-reconnects with a fresh
+session. Other MCP servers (DeepSense) use standard `MCPStreamableHTTPTool`.
 
 ---
 

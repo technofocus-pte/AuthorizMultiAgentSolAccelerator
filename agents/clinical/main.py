@@ -16,9 +16,11 @@ from pathlib import Path
 import httpx
 from agent_framework import MCPStreamableHTTPTool, SkillsProvider
 from agent_framework.azure import AzureOpenAIResponsesClient
+from agent_framework.exceptions import ToolExecutionException
 from azure.ai.agentserver.agentframework import from_agent_framework
 from azure.identity import DefaultAzureCredential
 from dotenv import load_dotenv
+from mcp.shared.exceptions import McpError
 
 from schemas import ClinicalResult
 
@@ -70,6 +72,29 @@ _MCP_HTTP_CLIENT = httpx.AsyncClient(
 )
 
 
+class _ReconnectingMCPTool(MCPStreamableHTTPTool):
+    """MCPStreamableHTTPTool that auto-reconnects on expired MCP sessions.
+
+    PubMed's MCP server (pubmed.mcp.claude.com) terminates idle sessions
+    after ~10 minutes. The base class retries on ClosedResourceError (TCP
+    disconnect) but not on McpError('Session terminated') (MCP-level session
+    expiry). This subclass catches both and reconnects once.
+    """
+
+    async def call_tool(self, tool_name: str, **kwargs) -> str:
+        try:
+            return await super().call_tool(tool_name, **kwargs)
+        except ToolExecutionException as exc:
+            if exc.__cause__ and isinstance(exc.__cause__, McpError) and "Session terminated" in str(exc.__cause__):
+                import logging
+                logging.getLogger(__name__).info(
+                    "MCP session expired for %s. Reconnecting...", self.name
+                )
+                await self.connect(reset=True)
+                return await super().call_tool(tool_name, **kwargs)
+            raise
+
+
 def main() -> None:
     # --- Observability: env var setup for Foundry agentserver adapter ---
     # The adapter's init_tracing() (called by from_agent_framework().run()) handles
@@ -94,7 +119,7 @@ def main() -> None:
         http_client=_MCP_HTTP_CLIENT,
         load_prompts=False,
     )
-    pubmed_tool = MCPStreamableHTTPTool(
+    pubmed_tool = _ReconnectingMCPTool(
         name="pubmed",
         description="Search biomedical literature on PubMed",
         url=os.environ["MCP_PUBMED"],

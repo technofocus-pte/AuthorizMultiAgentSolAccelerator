@@ -210,7 +210,6 @@ def run() -> None:
         from azure.ai.projects.models import (
             AgentProtocol,
             HostedAgentDefinition,
-            MCPTool,
             ProtocolVersionRecord,
         )
         from azure.core.pipeline.policies import CustomHookPolicy
@@ -254,23 +253,22 @@ def run() -> None:
     mcp_npi = "https://mcp.deepsense.ai/npi_registry/mcp"
     mcp_cms = "https://mcp.deepsense.ai/cms_coverage/mcp"
 
-    # Foundry MCPTool definitions -- reference the connections created in Step 1.
-    # These tell Foundry Agent Service to proxy MCP tool calls through Foundry's
-    # managed infrastructure instead of the hosted container's outbound network.
-    clinical_tools = [
-        MCPTool(server_label="icd10", server_url="https://mcp.deepsense.ai/icd10_codes/mcp",
-                require_approval="never", project_connection_id="icd10"),
-        MCPTool(server_label="pubmed", server_url="https://pubmed.mcp.claude.com/mcp",
-                require_approval="never", project_connection_id="pubmed"),
-        MCPTool(server_label="clinical-trials", server_url="https://mcp.deepsense.ai/clinical_trials/mcp",
-                require_approval="never", project_connection_id="clinical-trials"),
-    ]
-    coverage_tools = [
-        MCPTool(server_label="npi-registry", server_url="https://mcp.deepsense.ai/npi_registry/mcp",
-                require_approval="never", project_connection_id="npi-registry"),
-        MCPTool(server_label="cms-coverage", server_url="https://mcp.deepsense.ai/cms_coverage/mcp",
-                require_approval="never", project_connection_id="cms-coverage"),
-    ]
+    # Foundry MCPTool definitions are DISABLED — passing MCPTool definitions in
+    # HostedAgentDefinition.tools causes the agentserver adapter to inject a
+    # UserInfoContextMiddleware that calls /agents/{name}/tools/resolve. This API
+    # is not yet available in all Foundry regions (returns 404), which crashes
+    # the ASGI pipeline with "No response returned". MCP tools are handled
+    # directly by MCPStreamableHTTPTool in each agent's main.py instead.
+    # Re-enable when the tools/resolve API is GA in your Foundry region.
+    # clinical_tools = [
+    #     MCPTool(server_label="icd10", ...),
+    #     MCPTool(server_label="pubmed", ...),
+    #     MCPTool(server_label="clinical-trials", ...),
+    # ]
+    # coverage_tools = [
+    #     MCPTool(server_label="npi-registry", ...),
+    #     MCPTool(server_label="cms-coverage", ...),
+    # ]
 
     agents = [
         {
@@ -292,7 +290,7 @@ def run() -> None:
                 "APPLICATION_INSIGHTS_CONNECTION_STRING": app_insights_cs,
                 "APPLICATIONINSIGHTS_CONNECTION_STRING": app_insights_cs,
             },
-            "tools": clinical_tools,
+            "tools": [],  # MCPTool defs disabled (see comment above)
         },
         {
             "name": "coverage-assessment-agent",
@@ -312,7 +310,7 @@ def run() -> None:
                 "APPLICATION_INSIGHTS_CONNECTION_STRING": app_insights_cs,
                 "APPLICATIONINSIGHTS_CONNECTION_STRING": app_insights_cs,
             },
-            "tools": coverage_tools,
+            "tools": [],  # MCPTool defs disabled (see comment above)
         },
         {
             "name": "compliance-agent",

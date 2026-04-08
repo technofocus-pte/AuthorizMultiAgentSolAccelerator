@@ -140,43 +140,53 @@ prior-auth-maf/
 
 ---
 
-## MCP Integration — Hybrid Approach
+## MCP Integration
 
-MCP tools use a **hybrid wiring** strategy for maximum reliability:
+All MCP tool calls are made **directly from the agent container** via `MCPStreamableHTTPTool`.
+Each agent's `main.py` creates tool instances with a shared `httpx.AsyncClient` (including
+the `User-Agent: claude-code/1.0` header required by DeepSense CloudFront). Tools are
+passed via `tools=[...]` to `.as_agent()` and called directly during inference.
 
-1. **In-container wiring** — each agent container creates `MCPStreamableHTTPTool` instances with a shared `httpx.AsyncClient` (including the `User-Agent: claude-code/1.0` header required by DeepSense CloudFront). Tools are passed via `tools=[...]` to `.as_agent()` so the agent can call them directly during inference.
-2. **Foundry project connections** — `scripts/register_agents.py` also registers `MCPTool` references as Foundry project-level tool connections via the ARM REST API, enabling Foundry portal visibility and proxy routing.
+> **Note:** `scripts/register_agents.py` also creates Foundry project connections for
+> portal visibility (**Build → Tools**), but agents are registered with `tools=[]` —
+> `MCPTool` definitions on `HostedAgentDefinition` are disabled because the Foundry
+> `tools/resolve` API is not yet available in all regions. MCP tools are handled
+> entirely by in-container `MCPStreamableHTTPTool`.
 
-This dual approach ensures agents work in both Docker Compose (direct HTTP) and Foundry Hosted Agent (managed proxy) modes without configuration changes.
+### PubMed Session Reconnect
+
+PubMed's MCP server (`pubmed.mcp.claude.com`) terminates idle sessions after
+~10 minutes. The clinical agent uses `_ReconnectingMCPTool` — a subclass of
+`MCPStreamableHTTPTool` that catches `McpError('Session terminated')` and
+automatically reconnects with a fresh session. Other MCP servers (DeepSense)
+do not have aggressive session TTLs and use standard `MCPStreamableHTTPTool`.
 
 ### How MCP Tools Are Provisioned
 
 During `azd up`, the `scripts/register_agents.py` script:
 
-1. **Creates project connections** via the ARM REST API (idempotent PUT) for each MCP server
-2. **Registers agents** with `MCPTool` references linking to those connections
-3. Foundry Agent Service proxies MCP calls through its managed infrastructure
-
-At container startup, each agent's `main.py` also creates local `MCPStreamableHTTPTool` instances that connect directly to MCP servers — this is the primary tool execution path.
+1. **Creates project connections** via the ARM REST API (idempotent PUT) for each MCP server (portal visibility)
+2. **Registers agents** with `tools=[]` and `MCP_*` environment variables
+3. **Agent containers** use `MCPStreamableHTTPTool` to call MCP servers directly via the `MCP_*` URLs
 
 ```python
 # scripts/register_agents.py (simplified)
 
-from azure.ai.projects.models import MCPTool, HostedAgentDefinition
+from azure.ai.projects.models import HostedAgentDefinition
 
-# Foundry MCPTool references — linked to project connections
-clinical_tools = [
-    MCPTool(server_label="icd10", server_url="...",
-            require_approval="never", project_connection_id="icd10"),
-    MCPTool(server_label="pubmed", server_url="...",
-            require_approval="never", project_connection_id="pubmed"),
-    MCPTool(server_label="clinical-trials", server_url="...",
-            require_approval="never", project_connection_id="clinical-trials"),
-]
-
+# Agents are registered with tools=[] — MCP tool calls are handled
+# directly by MCPStreamableHTTPTool in each agent's main.py.
 agent = client.agents.create_version(
     agent_name="clinical-reviewer-agent",
-    definition=HostedAgentDefinition(..., tools=clinical_tools),
+    definition=HostedAgentDefinition(
+        ...,
+        environment_variables={
+            "MCP_ICD10_CODES": "https://mcp.deepsense.ai/icd10_codes/mcp",
+            "MCP_PUBMED": "https://pubmed.mcp.claude.com/mcp",
+            "MCP_CLINICAL_TRIALS": "https://mcp.deepsense.ai/clinical_trials/mcp",
+        },
+        tools=[],  # MCPTool defs disabled (tools/resolve API not GA in all regions)
+    ),
 )
 ```
 
@@ -381,13 +391,14 @@ This project consumes **remote MCP servers** from the
 ### How MCP Is Integrated
 
 ```
-agents/<name>/main.py     — MCPStreamableHTTPTool instantiation + shared httpx client
+agents/<name>/main.py     — MCPStreamableHTTPTool instances (direct HTTP to MCP servers)
     ↓ passed via
-.as_agent(tools=[...])    — MAF wires tools into the agent (primary execution path)
+.as_agent(tools=[...])    — MAF wires tools into the agent for inference
     ↓ hosted by
-from_agent_framework(agent).run()   — Exposes POST /responses; agent calls tools during inference
+from_agent_framework(agent).run()   — Exposes POST /responses endpoint
 
-scripts/register_agents.py — MCPTool references registered with Foundry (portal visibility + proxy)
+scripts/register_agents.py — Creates Foundry project connections (portal visibility)
+                             Registers agents with tools=[] and MCP_* env vars
 ```
 
 ---

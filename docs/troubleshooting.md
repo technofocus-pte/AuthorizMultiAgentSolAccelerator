@@ -26,6 +26,44 @@ The backend logs show an auth error when trying to invoke a hosted agent.
 
 ---
 
+## PubMed MCP: "Session terminated" / search_articles Fails
+
+PubMed literature search fails with `search_articles: PubMed search failed` but
+other MCP tools (ICD-10, Clinical Trials, NPI, CMS) work fine.
+
+**Cause:** PubMed's MCP server (`pubmed.mcp.claude.com`) terminates idle sessions
+after ~10 minutes. The agent container reuses the same MCP session across requests.
+If the session has been idle too long between user submissions, PubMed responds
+with `McpError("Session terminated")`.
+
+**Fix (already applied):** The clinical agent uses `_ReconnectingMCPTool` — a
+subclass of `MCPStreamableHTTPTool` that catches `Session terminated` errors
+and automatically reconnects with a fresh session. See `agents/clinical/main.py`.
+
+If you still see this error, check:
+1. The container image was rebuilt after the fix (`azd up`)
+2. The agent version includes the `_ReconnectingMCPTool` change (check image tag in
+   `az cognitiveservices agent show`)
+
+---
+
+## Agent Returns "ID cannot be null or empty" / status: "failed"
+
+All agent calls fail with `400 - ID cannot be null or empty` or return
+`status: "failed"` with empty output.
+
+**Cause:** `MCPTool` definitions in `HostedAgentDefinition.tools` cause the
+`agentserver-core` adapter to inject a `UserInfoContextMiddleware` that calls
+`/agents/{name}/tools/resolve`. This API is not available in all Foundry regions
+(returns 404), which crashes the entire ASGI pipeline.
+
+**Fix:** Ensure agents are registered with `tools=[]` in `scripts/register_agents.py`.
+MCP tools are handled directly by `MCPStreamableHTTPTool` in each agent's `main.py`,
+not via Foundry's `MCPTool` proxy. See the comments in `scripts/register_agents.py`
+for details.
+
+---
+
 ## Agents Return Empty or Error Responses
 
 Agents connect but return `{"error": "...", "tool_results": []}` instead of structured output.
