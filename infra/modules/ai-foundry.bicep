@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // Microsoft Foundry — Resource + Project (new architecture)
 // Creates the Foundry resource (CognitiveServices/accounts) and a project
-// for deploying Azure OpenAI models (e.g., gpt-5.4) from the model catalog.
+// for deploying Azure OpenAI models (e.g., gpt-5.4-mini) from the model catalog.
 //
 // Reference: https://learn.microsoft.com/en-us/azure/foundry/how-to/create-resource-template
 // ---------------------------------------------------------------------------
@@ -22,11 +22,11 @@ param appInsightsInstrumentationKey string
 @description('Application Insights resource ID — the target resource for the AppInsights connection')
 param appInsightsResourceId string
 
-@description('Name for the model deployment (used in API calls, e.g. gpt-5.4)')
-param deploymentName string = 'gpt-5.4'
+@description('Name for the model deployment (used in API calls, e.g. gpt-5.4-mini)')
+param deploymentName string = 'gpt-5.4-mini'
 
 @description('Model version to deploy.')
-param modelVersion string = '2026-03-05'
+param modelVersion string = '2026-03-17'
 
 @description('Deployment SKU: DataZoneStandard (data residency within geographic zone) or GlobalStandard (no data residency, wider region availability).')
 @allowed(['DataZoneStandard', 'GlobalStandard'])
@@ -87,7 +87,7 @@ resource appInsightsConnection 'Microsoft.CognitiveServices/accounts/projects/co
     }
   }
 }
-// ── gpt-5.4 Model Deployment ─────────────────────────────────────────────
+// ── gpt-5.4-mini Model Deployment ─────────────────────────────────────────────
 // GlobalStandard  = no data residency guarantee, available in more regions.
 // DataZoneStandard = data residency bounded to a geographic zone (US/EU),
 //                    available in East US 2 only (NOT Sweden Central).
@@ -102,7 +102,7 @@ resource modelDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-
   properties: {
     model: {
       format: 'OpenAI'
-      name: 'gpt-5.4'
+      name: 'gpt-5.4-mini'
       version: modelVersion
     }
     versionUpgradeOption: 'OnceCurrentVersionExpired'
