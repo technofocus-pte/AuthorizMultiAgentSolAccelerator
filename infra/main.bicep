@@ -31,6 +31,9 @@ param deploymentSkuName string = 'GlobalStandard'
 
 @description('Whether container images have been built to ACR (set automatically by postprovision hook)')
 param imagesBuilt string = ''
+// ✅ NEW PARAMETER (ONLY ADDITION)
+@description('Name of the existing Resource Group to deploy resources into')
+param existingResourceGroupName string
 
 // ── MCP Server URL parameters (all have production defaults) ────────────────
 
@@ -59,11 +62,9 @@ var tags = {
 }
 
 // ── Resource Group ──────────────────────────────────────────────────────────
-
-resource rg 'Microsoft.Resources/resourceGroups@2024-03-01' = {
-  name: '${abbrs.resourcesResourceGroups}${environmentName}'
-  location: location
-  tags: tags
+// ✅ EXISTING RESOURCE GROUP (ONLY CHANGE)
+resource rg 'Microsoft.Resources/resourceGroups@2024-03-01' existing = {
+  name: existingResourceGroupName
 }
 
 // ── Container Registry ──────────────────────────────────────────────────────
